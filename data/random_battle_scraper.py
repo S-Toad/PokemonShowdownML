@@ -9,7 +9,9 @@ def random_battle_scraper(debug=False):
     game_urls = []
     for user in user_urls:
         game_urls.extend(get_game_urls(user, RANDOM_BATTLE_MODE, debug))
-        break
+
+    game_urls = set(game_urls)
+    print(len(game_urls))
     
 
 
@@ -30,7 +32,6 @@ def get_top_users(mode, debug=False):
 
         if debug:
             print("User Found: {}".format(username))
-            break
 
     return user_urls
 
@@ -52,19 +53,21 @@ def get_game_urls(user, mode, debug=False):
     if debug:
         print('Found {} list items'.format(len(li_items)))
     
-    game_tags = []
+    game_urls = []
     for li in li_items:
-        hrefURL = li.find('a')['href']
+        hrefURL = li.find('a')
+        if hrefURL is None:
+            continue
+        hrefURL = hrefURL['href']
         if mode in hrefURL:
-            hrefURL = hrefURL.replace('/', '')
-            game_tags.append(hrefURL)
+            game_urls.append('https://replay.pokemonshowdown.com' + hrefURL + '.log')
             if debug:
-                print("Filtered {}".format(hrefURL))
+                print('Filtered {}'.format('https://replay.pokemonshowdown.com' + hrefURL + '.log'))
     
     if debug:
-        print("Filtered list down to {}".format(len(hrefURL)))
+        print('Filtered list down to {}'.format(len(game_urls)))
 
-    return game_tags
+    return game_urls
 
 def store_to_db(data):
     pass
