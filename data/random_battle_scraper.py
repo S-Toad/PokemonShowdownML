@@ -1,4 +1,5 @@
 import requests
+import os
 from bs4 import BeautifulSoup
 
 def random_battle_scraper(debug=False):
@@ -10,8 +11,17 @@ def random_battle_scraper(debug=False):
     for user in user_urls:
         game_urls.extend(get_game_urls(user, RANDOM_BATTLE_MODE, debug))
 
-    game_urls = set(game_urls)
-    print(len(game_urls))
+    game_urls = set(game_urls)  # Remove duplicates
+
+    if not os.path.exists("games_data/"):
+        os.makedirs("games_data/")
+
+    print("---------------")
+    for game_url in game_urls:
+        r = requests.get(game_url)
+        f = open('games_data/' + game_url.split('com/')[1], 'w+')
+        f.write(r.content)
+
     
 
 
@@ -32,6 +42,7 @@ def get_top_users(mode, debug=False):
 
         if debug:
             print("User Found: {}".format(username))
+            break
 
     return user_urls
 
@@ -62,7 +73,8 @@ def get_game_urls(user, mode, debug=False):
         if mode in hrefURL:
             game_urls.append('https://replay.pokemonshowdown.com' + hrefURL + '.log')
             if debug:
-                print('Filtered {}'.format('https://replay.pokemonshowdown.com' + hrefURL + '.log'))
+                pass
+                #print('Filtered {}'.format('https://replay.pokemonshowdown.com' + hrefURL + '.log'))
     
     if debug:
         print('Filtered list down to {}'.format(len(game_urls)))
