@@ -21,33 +21,44 @@ fs.readdir('./games_data', function(err, files) {
             }
             
             console.log("Reading: " + filePath);
-            data.split("\n").forEach(function(line, lineIndex) {
-                if (line.includes("|seed|")) {
+            try {
+                data.split("\n").forEach(function(line, lineIndex) {
+                    if (line.includes("|seed|")) {
 
-                    console.log(line);
-                    var seedArray = line.replace("|seed|", "").replace("\r", "").split(",").map(function(item) {
-                        return parseInt(item, 10);
-                    });
-                    console.log(seedArray);
+                        console.log(line);
+                        var seedArray = line.replace("|seed|", "").replace("\r", "").split(",").map(function(item) {
+                            return parseInt(item, 10);
+                        });
+                        console.log(seedArray);
+                        if (seedArray.length != 4) {
+                            console.log("Seed not of size 4, deleting...")
+                            fs.unlink(filePath);
+                            var BreakException = {};
+                            throw BreakException;
+                        }
 
-                    var options = {
-                        "formatid": "gen7randombattle",
-                        "seed": seedArray
-                    };
 
-                    console.log(options)
+                        var options = {
+                            "formatid": "gen7randombattle",
+                            "seed": seedArray
+                        };
 
-                    var pseduoBattle = new Battle(options);
-                    
-                    pseduoBattle.setPlayer("p1", p1);
-                    pseduoBattle.setPlayer("p2", p2);
-                    
-                    var p1Team = JSON.stringify(pseduoBattle.p1.team, null, 0);
-                    var p2Team = JSON.stringify(pseduoBattle.p2.team, null, 0);
+                        console.log(options)
 
-                    fs.appendFile(filePath, "\n" + p1Team + "\n" + p2Team, null);
-                }
-            });
+                        var pseduoBattle = new Battle(options);
+                        
+                        pseduoBattle.setPlayer("p1", p1);
+                        pseduoBattle.setPlayer("p2", p2);
+                        
+                        var p1Team = JSON.stringify(pseduoBattle.p1.team, null, 0);
+                        var p2Team = JSON.stringify(pseduoBattle.p2.team, null, 0);
+
+                        fs.appendFile(filePath, "\n" + p1Team + "\n" + p2Team, null);
+                    }
+                });
+            } catch(e) {
+                console.log("Ending file");
+            }
         });
     });
 });
