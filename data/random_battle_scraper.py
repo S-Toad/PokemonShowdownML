@@ -18,11 +18,15 @@ def random_battle_scraper(debug=False):
 
     print("---------------")
     for game_url in game_urls:
-        r = requests.get(game_url)
-        f = open('games_data/' + game_url.split('com/')[1], 'w+')
-        f.write(r.content)
+        logRequest = requests.get(game_url + ".log")
 
-    
+        mainRequest = requests.get(game_url)
+        soup = BeautifulSoup(mainRequest.text, "html.parser")
+        date = soup.find(class_="uploaddate").text
+        date = date.replace("Uploaded: ", "").split(" | ")[0].encode('utf-8')
+
+        f = open('games_data/' + game_url.split('com/')[1], 'w+')
+        f.write(date + "\n" + logRequest.text.encode('utf-8'))    
 
 
 def get_top_users(mode, debug=False):
@@ -35,6 +39,7 @@ def get_top_users(mode, debug=False):
     user_rows.pop(0)  # First table row is trash
 
     user_urls = []
+    i = 0
     for row in user_rows:
         # Obtain username
         username = row.find('a')['href'].replace('/users/', '')
@@ -42,7 +47,10 @@ def get_top_users(mode, debug=False):
 
         if debug:
             print("User Found: {}".format(username))
-            break
+            i = i + 1
+
+            if i == 1:
+                break
 
     return user_urls
 
@@ -71,10 +79,9 @@ def get_game_urls(user, mode, debug=False):
             continue
         hrefURL = hrefURL['href']
         if mode in hrefURL:
-            game_urls.append('https://replay.pokemonshowdown.com' + hrefURL + '.log')
+            game_urls.append('https://replay.pokemonshowdown.com' + hrefURL)
             if debug:
                 pass
-                #print('Filtered {}'.format('https://replay.pokemonshowdown.com' + hrefURL + '.log'))
     
     if debug:
         print('Filtered list down to {}'.format(len(game_urls)))
