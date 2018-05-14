@@ -8,19 +8,19 @@ def random_battle_scraper(debug=False):
     
     user_urls = get_top_users(RANDOM_BATTLE_MODE, debug)
     
-    game_urls = []
+    game_tags = []
     for user in user_urls:
-        game_urls.extend(get_game_urls(user, RANDOM_BATTLE_MODE, debug))
+        game_tags.extend(get_game_tags(user, RANDOM_BATTLE_MODE, debug))
 
-    game_urls = set(game_urls)  # Remove duplicates
+    game_tags = set(game_tags)  # Remove duplicates
 
     if not os.path.exists("games_data/"):
         os.makedirs("games_data/")
 
     print("---------------")
     gitRepo = Git('./Pokemon-Showdown')
-    for game_url in game_urls:
-        write_to_file(gitRepo, game_url)
+    for game_tag in game_tags:
+        write_to_file(gitRepo, game_tag)
     
 
 
@@ -51,7 +51,7 @@ def get_top_users(mode, debug=False):
     return user_urls
 
 
-def get_game_urls(user, mode, debug=False):
+def get_game_tags(user, mode, debug=False):
     SEARCH_URL = 'https://replay.pokemonshowdown.com/search/'
     li_items = []
 
@@ -68,7 +68,7 @@ def get_game_urls(user, mode, debug=False):
     if debug:
         print('Found {} list items'.format(len(li_items)))
     
-    game_urls = []
+    games_tags = []
     for li in li_items:
         hrefURL = li.find('a')
         if hrefURL is None:
@@ -76,32 +76,32 @@ def get_game_urls(user, mode, debug=False):
         hrefURL = hrefURL['href']
         if mode in hrefURL:
             hrefURL = hrefURL.replace('/', '')
-            game_urls.append(hrefURL)
+            games_tags.append(hrefURL)
             if debug:
                 pass
     
     if debug:
-        print('Filtered list down to {}'.format(len(game_urls)))
+        print('Filtered list down to {}'.format(len(games_tags)))
 
-    return game_urls
+    return games_tags
 
 
-def write_to_file(gitRepo, game_url):
-    logRequest = requests.get("https://replay.pokemonshowdown.com/" + game_url + ".log")
+def write_to_file(gitRepo, game_tag):
+    logRequest = requests.get("https://replay.pokemonshowdown.com/" + game_tag + ".log")
 
     seed = None
     for line in logRequest.iter_lines():
         if "|seed|" in line:
             seed = line.replace("|seed|", "").replace(",", " ")
             seed = '"' + seed + '"'
-        elif "forfeit" in line:
+        elif "forfeited" in line:
             return
     
     if seed is None or len(seed.split(' ')) != 4:
         return
 
 
-    mainRequest = requests.get("https://replay.pokemonshowdown.com/" + game_url)
+    mainRequest = requests.get("https://replay.pokemonshowdown.com/" + game_tag)
     mainSoup = BeautifulSoup(mainRequest.text, "html.parser")
     date = mainSoup.find(class_="uploaddate").text
     date = date.replace("Uploaded: ", "").split(" | ")[0].lower()
@@ -115,10 +115,10 @@ def write_to_file(gitRepo, game_url):
     gitRepo.checkout(commitHash)
     os.chdir("..")
 
-    f = open('games_data/' + game_url, 'w+')
+    f = open('games_data/' + game_tag, 'w+')
     f.write(logRequest.text.encode('utf-8'))
     f.close()
-    os.system('node get_battle_context_new.js "' + 'games_data/' + game_url + '" ' + seed)
+    os.system('node get_battle_context_new.js "' + 'games_data/' + game_tag + '" ' + seed)
 
 def getNumericDate(dateStr):
     dateStr = dateStr.replace(",", "")
