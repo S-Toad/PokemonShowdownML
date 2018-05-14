@@ -1,6 +1,7 @@
 import requests
 import os
 from bs4 import BeautifulSoup
+from git import Git
 
 def random_battle_scraper(debug=False):
     RANDOM_BATTLE_MODE = 'gen7randombattle'
@@ -17,16 +18,11 @@ def random_battle_scraper(debug=False):
         os.makedirs("games_data/")
 
     print("---------------")
+    gitRepo = Git('./Pokemon-Showdown')
     for game_url in game_urls:
-        logRequest = requests.get(game_url + ".log")
+        write_to_file(gitRepo, game_url)
+    
 
-        mainRequest = requests.get(game_url)
-        soup = BeautifulSoup(mainRequest.text, "html.parser")
-        date = soup.find(class_="uploaddate").text
-        date = date.replace("Uploaded: ", "").split(" | ")[0].encode('utf-8')
-
-        f = open('games_data/' + game_url.split('com/')[1], 'w+')
-        f.write(date + "\n" + logRequest.text.encode('utf-8'))    
 
 
 def get_top_users(mode, debug=False):
@@ -79,7 +75,8 @@ def get_game_urls(user, mode, debug=False):
             continue
         hrefURL = hrefURL['href']
         if mode in hrefURL:
-            game_urls.append('https://replay.pokemonshowdown.com' + hrefURL)
+            hrefURL = hrefURL.replace('/', '')
+            game_urls.append(hrefURL)
             if debug:
                 pass
     
@@ -87,6 +84,66 @@ def get_game_urls(user, mode, debug=False):
         print('Filtered list down to {}'.format(len(game_urls)))
 
     return game_urls
+
+
+def write_to_file(gitRepo, game_url):
+    logRequest = requests.get("https://replay.pokemonshowdown.com/" + game_url + ".log")
+
+    seed = None
+    for line in logRequest.iter_lines():
+        if "|seed|" in line:
+            seed = line.replace("|seed|", "").replace(",", " ")
+            seed = '"' + seed + '"'
+        elif "forfeit" in line:
+            return
+    
+    if seed is None or len(seed.split(' ')) != 4:
+        return
+
+
+    mainRequest = requests.get("https://replay.pokemonshowdown.com/" + game_url)
+    mainSoup = BeautifulSoup(mainRequest.text, "html.parser")
+    date = mainSoup.find(class_="uploaddate").text
+    date = date.replace("Uploaded: ", "").split(" | ")[0].lower()
+    
+    numericDate = getNumericDate(date)
+
+    print("Writing")
+    commitHash = gitRepo.rev_list('-n', '1', '--before="' + numericDate + '"', 'master')
+    print(commitHash)
+    os.chdir("./Pokemon-Showdown/")
+    gitRepo.checkout(commitHash)
+    os.chdir("..")
+
+    f = open('games_data/' + game_url, 'w+')
+    f.write(logRequest.text.encode('utf-8'))
+    f.close()
+    os.system('node get_battle_context_new.js "' + 'games_data/' + game_url + '" ' + seed)
+
+def getNumericDate(dateStr):
+    dateStr = dateStr.replace(",", "")
+    month, day, year = dateStr.split(" ")
+
+    month = {
+        'jan': '01',
+        'feb': '02',
+        'mar': '03',
+        'apr': '04',
+        'may': '05',
+        'jun': '06',
+        'jul': '07',
+        'aug': '08',
+        'sep': '09',
+        'oct': '10',
+        'nov': '11',
+        'dec': '12',
+    }.get(month)
+
+    if len(day) == 1:
+        day = '0' + day
+    
+    return year + '-' + month + '-' + day + ' 00:00'
+
 
 def store_to_db(data):
     pass

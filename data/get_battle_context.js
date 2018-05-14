@@ -1,64 +1,31 @@
 
+// Hook into the source code of pokemon showdown to simulate team generation
 const Battle = require('../../Pokemon-Showdown/sim/battle.js');
-var fs = require('fs');
+var fs = require('fs');  // Node.js library to access files
 
-var p1 = {"name": "pseduoOne"};
-var p2 = {"name": "pseduoTwo"};
+var BreakException = {};  // Exception used to break out of a ForEach
+var GAMES_DATA_PATH = './games_data/';  // Path to game log files
+var BATTLE_FORMAT = "gen7randombattle";
 
-fs.readdir('./games_data', function(err, files) {
-    if (err) {
-        console.error("Error");
-        process.exit(1);
-    }
+filePath = process.argv[2];
+seedString = process.argv[3];
 
-    files.forEach(function(file, index) {
-        console.log("Providing context for: " + file);
-        var filePath = './games_data/' + file;
-        fs.readFile(filePath, 'utf8', function(err, data) {
-            if (err) {
-                console.error("Error");
-                process.exit(1);
-            }
-            
-            console.log("Reading: " + filePath);
-            try {
-                data.split("\n").forEach(function(line, lineIndex) {
-                    if (line.includes("|seed|")) {
-
-                        console.log(line);
-                        var seedArray = line.replace("|seed|", "").replace("\r", "").split(",").map(function(item) {
-                            return parseInt(item, 10);
-                        });
-                        console.log(seedArray);
-                        if (seedArray.length != 4) {
-                            console.log("Seed not of size 4, deleting...")
-                            fs.unlink(filePath);
-                            var BreakException = {};
-                            throw BreakException;
-                        }
+provideContext(filePath, seedString);
 
 
-                        var options = {
-                            "formatid": "gen7randombattle",
-                            "seed": seedArray
-                        };
-
-                        console.log(options)
-
-                        var pseduoBattle = new Battle(options);
-                        
-                        pseduoBattle.setPlayer("p1", p1);
-                        pseduoBattle.setPlayer("p2", p2);
-                        
-                        var p1Team = JSON.stringify(pseduoBattle.p1.team, null, 0);
-                        var p2Team = JSON.stringify(pseduoBattle.p2.team, null, 0);
-
-                        fs.appendFile(filePath, "\n" + p1Team + "\n" + p2Team, null);
-                    }
-                });
-            } catch(e) {
-                console.log("Ending file");
-            }
-        });
+function provideContext(filePath, seedString) {
+    var seedArray = seedString.split(" ").map(function(item) {
+        return parseInt(item, 10);
     });
-});
+
+    var simBattle = new Battle({"formatid": BATTLE_FORMAT, "seed": seedArray});
+    simBattle.setPlayer("p1", {"name": "p1"});
+    simBattle.setPlayer("p2", {"name": "p2"});
+
+    var p1Team = JSON.stringify(simBattle.p1.team, null, 0);
+    var p2Team = JSON.stringify(simBattle.p2.team, null, 0);
+
+    // Append JSON of team to file
+    fs.appendFile(filePath, "\n" + p1Team + "\n" + p2Team, null);
+}
+
