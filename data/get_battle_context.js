@@ -17,7 +17,6 @@ seedString = process.argv[3];
 
 provideContext(filePath, seedString);
 
-
 function provideContext(filePath, seedString) {
     var seedArray = seedString.split(" ").map(function(item) {
         return parseInt(item, 10);
