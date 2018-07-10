@@ -7,8 +7,8 @@ name = input("Please input a name: ")
 
 ws = ShowdownWS(
     name,
-    "https://play.pokemonshowdown.com/",
-    3
+    "http://localhost-8080.psim.us/",
+    20
 )
 
 ws.beginConsole()

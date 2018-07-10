@@ -9,8 +9,9 @@ class ShowdownWS:
 
         print("Loading driver")
         self.ws = webdriver.Firefox()
-        self.ws.get(URL)
         self.ws.implicitly_wait(implicitWait)
+        self.ws.set_page_load_timeout(implicitWait)
+        self.ws.get(URL)
 
         print("Attempting login")
         targetEl = self.ws.find_element_by_name("login")
@@ -24,50 +25,52 @@ class ShowdownWS:
         targetEl = self.ws.find_element_by_css_selector("button[type='submit']")
         targetEl.click()
 
-        self.disconnect()
-    
-    def disconnect(self):
-        return
-        #self.url = self.ws.command_executor._url
-        #self.session_id = self.ws.session_id
-
-    def reconnect(self):
-        return
-        #self.ws = webdriver.Remote(command_executor=self.url)
-        #self.ws.session_id = self.session_id
-
-    # TODO: make async
-    def asyncFindMatch(self):
-        targetEl = self.ws.find_element_by_name("search")
-        targetEl.click()
+    def findMatch(self):
+        try:
+            targetEl = self.ws.find_element_by_name("search")
+            targetEl.click()
+        except BrokenPipeError:
+            self.findMatch()
 
     def challenge(self, username):
-        self.ws.find_element_by_name("finduser").click()
-        targetEl = self.ws.find_element_by_name("data")
+        try:
+            self.ws.find_element_by_name("finduser").click()
+            targetEl = self.ws.find_element_by_name("data")
 
-        targetEl.send_keys(username)
-        targetEl.send_keys(webdriver.common.keys.Keys.RETURN)
+            targetEl.send_keys(username)
+            targetEl.send_keys(webdriver.common.keys.Keys.RETURN)
 
-        self.ws.find_element_by_name("challenge").click()
-        self.ws.find_element_by_name("makeChallenge").click()
+            self.ws.find_element_by_name("challenge").click()
+            self.ws.find_element_by_name("makeChallenge").click()
+        except BrokenPipeError:
+            self.challenge(username)
 
     def acceptChallenge(self):
-        self.ws.find_element_by_name("acceptChallenge").click()
+        try:
+            self.ws.find_element_by_name("acceptChallenge").click()
+        except BrokenPipeError:
+            self.acceptChallenge()
     
+    def get_status(self):
+        pass
+    
+    def select_move(self, moveIndex):
+        pass
+
     def beginConsole(self):
         while True:
-            result = input("What would you like to do?")
+            result = input("What would you like to do: ")
             result = result.split(" ")
             choice = result[0]
 
-            self.reconnect()
-
-            if choice == "a":
-                self.asyncFindMatch()
-            elif choice == "b":
-                self.challenge(result[1])
+            if choice == "f":
+                self.findMatch()
             elif choice == "c":
+                self.challenge(result[1])
+            elif choice == "a":
                 self.acceptChallenge()
-            
-            self.disconnect()
+            elif choice == "s":
+                self.get_status()
+            elif choice in "1234":
+                self.select_move(int(choice))
             
