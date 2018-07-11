@@ -20,10 +20,10 @@ class ShowdownWS:
         self.ws.get(URL)
 
         print("Attempting login")
-        self.wait_for_element_to_click(self.handle_find_element_by_name("login"))
+        self.handle_click_by_name("login")
 
         print("Filling name")
-        targetEl = self.handle_find_element_by_name("username") 
+        targetEl = self.ws.find_element_by_name("username") 
         targetEl.send_keys(username)
 
         print("Submitting")
@@ -41,61 +41,49 @@ class ShowdownWS:
             else:
                 return self.check_pipe(time_out)
     
-    def handle_click_find_element_by_name(self, name, time_out=DEFAULT_TIME_OUT):
+    def handle_click_by_name(self, name, time_out=DEFAULT_TIME_OUT):
         try:
             targetEl = self.ws.find_element_by_name(name)
-            print("Found element %s" % name)
-            return 
+            try:
+                targetEl.click()
+                return True
+            except StaleElementReferenceException:
+                time_out = time_out - 1
         except NoSuchElementException:
-            print("Couldnt find %s" % name)
             time_out = time_out - 1
-            if time_out == 0:
-                return None
-
-    def wait_for_element_to_click(self, element, time_out=DEFAULT_TIME_OUT):
-        try:
-            print("Trying to click")
-            print(element)
-            element.click()
-            return True
-        except StaleElementReferenceException:
-            time_out = time_out - 1
-            if time_out == 0:
-                print("Failed")
-                return False
-            else:
-                time.sleep(20/1000)
-                return self.wait_for_element_to_click(element, time_out)
+        if time_out == 0:
+            return False
+        else:
+            return self.handle_click_by_name(name, time_out)
 
 
     def findMatch(self, time_out=DEFAULT_TIME_OUT):
         self.check_pipe(time_out)
-        self.wait_for_element_to_click(self.handle_find_element_by_name("search"))
+        self.handle_click_by_name("search")
 
     def challenge(self, username, time_out=DEFAULT_TIME_OUT):
         self.check_pipe(time_out)
 
-        self.wait_for_element_to_click(self.handle_find_element_by_name("finduser"))
+        self.handle_click_by_name("finduser")
         
-        targetEl = self.handle_find_element_by_name("data")
+        targetEl = self.ws.find_element_by_name("data")
         targetEl.send_keys(username)
         targetEl.send_keys(webdriver.common.keys.Keys.RETURN)
 
-        self.wait_for_element_to_click(self.handle_find_element_by_name("challenge"))
-        self.wait_for_element_to_click(self.handle_find_element_by_name("makeChallenge"))
+        self.handle_click_by_name("challenge")
+        self.handle_click_by_name("makeChallenge")
+        self.skip_ahead()
 
     def acceptChallenge(self, time_out=DEFAULT_TIME_OUT):
         self.check_pipe(time_out)
-        self.wait_for_element_to_click(self.handle_find_element_by_name("acceptChallenge"))
+        self.handle_click_by_name("acceptChallenge")
+        self.skip_ahead()
     
     def get_initial_state(self, time_out=DEFAULT_TIME_OUT):
         self.check_pipe(time_out)
 
-        pokemon_elements = [self.handle_find_element_by_name("chooseDisabled")]
-        pokemon_elements.extend(self.handle_find_element_by_name("chooseSwitch"))
-
-        print(len(pokemon_elements))
-
+        pokemon_elements = [self.ws.find_element_by_name("chooseDisabled")]
+        pokemon_elements.extend(self.ws.find_elements_by_name("chooseSwitch"))
         for poke_element in pokemon_elements:
             pokemonName = None
             pokemonLevel = None
@@ -145,9 +133,26 @@ class ShowdownWS:
             print("Move: %s" % pokemonMoves)
 
     def select_move(self, moveIndex):
-        print("button[value=%d]" % moveIndex)
-        button = self.ws.find_element_by_css_selector('button[value="%d"]' % moveIndex)
-        self.wait_for_element_to_click(button)
+        self.check_pipe()
+        button = self.ws.find_element_by_css_selector('button[name="chooseMove"][value="%d"]' % moveIndex)
+        button.click()
+        return self.skip_ahead()
+    
+    def switch(self, switchIndex):
+        self.check_pipe()
+        button = self.ws.find_element_by_css_selector('button[name="chooseSwitch"][value="%d"]' % switchIndex)
+        button.click()
+        return self.skip_ahead()
+    
+    def skip_ahead(self, time_out=360):
+        while True:
+            result = self.handle_click_by_name("goToEnd")
+            if result:
+                return True
+            time_out = time_out - 1
+            if time_out == 0:
+                return False
+            time.sleep(500)
 
     def beginConsole(self):
         while True:
@@ -167,6 +172,8 @@ class ShowdownWS:
                 self.acceptChallenge()
             elif choice == "s":
                 self.get_initial_state()
-            elif choice in "1234":
-                self.select_move(int(choice))
+            elif choice == "m":
+                self.select_move(int(result[1]))
+            elif choice == "sw":
+                self.switch(int(result[1]))
             

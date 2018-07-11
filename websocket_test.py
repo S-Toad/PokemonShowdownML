@@ -7,7 +7,7 @@ name = input("Please input a name: ")
 
 ws = ShowdownWS(
     name,
-    "http://localhost-8000.psim.us/",
+    "http://localhost-8080.psim.us/",
     10
 )
 
