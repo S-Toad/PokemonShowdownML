@@ -3,11 +3,20 @@ from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import StaleElementReferenceException, NoSuchElementException
 from selenium.webdriver.common.action_chains import ActionChains
+
+from enum import Enum
 import time
 
 
 DEFAULT_TIME_OUT = 20
 
+
+class State(Enum):
+    MAIN_MENU = 1
+    QUEUED = 2
+    WAITING_FOR_ACTION = 3
+    WAITING_FOR_SWITCH = 4
+    FINISHED = 5
 
 class ShowdownWS:
     def __init__(self, username, URL, implicitWait):
@@ -153,6 +162,14 @@ class ShowdownWS:
             if time_out == 0:
                 return False
             time.sleep(500)
+    
+    def getState(self):
+        self.check_pipe()
+
+        if self.ws.find_element_by_name("search").size() > 0:
+            return State.MAIN_MENU
+        elif self.ws.find_element_by_name("cancelSearch").size() > 0:
+            return State.QUEUED
 
     def beginConsole(self):
         while True:
