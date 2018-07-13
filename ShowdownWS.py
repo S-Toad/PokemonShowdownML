@@ -4,7 +4,12 @@ from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import StaleElementReferenceException, NoSuchElementException
 from selenium.webdriver.common.action_chains import ActionChains
 
+from Pokemon import Pokemon
+
+from data.parseJSData import getPickle, DATA_TYPE
+
 from enum import Enum
+exit()
 import time
 
 
@@ -21,6 +26,12 @@ class State(Enum):
 class ShowdownWS:
     def __init__(self, username, URL, implicitWait):
         print("Initializing an instance using username: " + username)
+
+        print("Loading Dicts")
+        self.nameDict = getPickle(DATA_TYPE.POKE_DICT)
+        self.abilDict = getPickle(DATA_TYPE.ABIL_DICT)
+        self.moveDict = getPickle(DATA_TYPE.MOVE_DICT)
+        self.itemDict = getPickle(DATA_TYPE.ITEM_DICT)
 
         print("Loading driver")
         self.ws = webdriver.Firefox()
@@ -44,7 +55,7 @@ class ShowdownWS:
             self.ws.find_element_by_class_name("logo")
             return True
         except (ConnectionAbortedError, BrokenPipeError):
-            time_out = time_out - 1
+            time_out = time_out - 1 
             if time_out == 0:
                 return False
             else:
@@ -93,53 +104,65 @@ class ShowdownWS:
 
         pokemon_elements = [self.ws.find_element_by_name("chooseDisabled")]
         pokemon_elements.extend(self.ws.find_elements_by_name("chooseSwitch"))
-        for poke_element in pokemon_elements:
-            pokemonName = None
-            pokemonLevel = None
-            pokemonHP = None
-            pokemonAbility = None
-            pokemonItem = None
-            pokemonMoves = None
 
+        pkmnList = []
+
+        pkmn = Pokemon(self.nameDict, self.itemDict, self.abilDict, self.moveDict)
+        for poke_element in pokemon_elements:
+            # Hovers over the element to reveal a tooltip
             ActionChains(self.ws).move_to_element(poke_element).perform()
             tooltip = self.ws.find_element_by_class_name("tooltip")
 
+            # H2 tag contains name and level
             h2 = tooltip.find_element_by_tag_name("h2").text.split(" ")
+
+            # If the length is 3, the pokemon has a special name
+            # Form of [name, specialName, level] or [name, level]
             if len(h2) == 3:
-                pokemonName = h2[1][1:-1]
-                pokemonLevel = h2[2].replace("L", "")
+                if "(" in h2[1]:
+                    pkmn.setName(h2[1][1:-1])
+                else:
+                    pkmn.setName(h2[0] + h2[1])
+                pkmn.setLevel(h2[2])
+                #pokemonName = h2[1][1:-1]
+                #pokemonLevel = h2[2].replace("L", "")
             else:
-                pokemonName = h2[0]
-                pokemonLevel = h2[1].replace("L", "")
+                pkmn.setName(h2[0])
+                pkmn.setLevel(h2[1])
+                #pokemonName = h2[0]
+                #pokemonLevel = h2[1].replace("L", "")
 
+            pokemonInfo = tooltip.find_elements_by_tag_name("p")
 
-            lines = tooltip.find_elements_by_tag_name("p")
+            # Health is in the form of: (a/b) where b is the max health
+            healthString = pokemonInfo[0].text.split("/")[1].replace(")", "")
+            pkmn.setMaxHP(healthString)
 
-            pokemonHP = lines[0].text.split("/")[1].replace(")", "")
-
-            if "/" in lines[1].text:
-                pokemonAbility, pokemonItem = lines[1].text.split(" / ")
-                pokemonAbility = pokemonAbility.split(": ")[1]
-                pokemonItem = pokemonItem.split(": ")[1]
+            # Next line is in the form of: "Ability: x / Item: y"
+            # If no item is present, then itll be: "Ability: x"
+            if "/" in pokemonInfo[1].text:
+                pokemonAbility, pokemonItem = pokemonInfo[1].text.split(" / ")
+                pkmn.setAbil(pokemonAbility.split(": ")[1])
+                pkmn.setItem(pokemonItem.split(": ")[1])
             else:
-                pokemonAbility = lines[1].text.split(": ")[1]
-                pokemonItem = ""
+                pkmn.setAbil(pokemonInfo[1].text.split(": ")[1])
 
-            mm = lines[3].text.replace("• ", "")
-            mm = mm.split("\n")
-            pokemonMoves = []
+            moveParagraph = pokemonInfo[3].text.replace("• ", "")
+            moveLines = moveParagraph.split("\n")
 
-            for move in mm:
+            for move in moveLines:
                 if ")" in move:
                     move = move[:move.rfind(" ")]
-                pokemonMoves.append(move)
+                pkmn.setMove(move)
+            
+            pkmnList.append(pkmn)
+            pkmn = Pokemon(self.nameDict, self.itemDict, self.abilDict, self.moveDict)
+        
+        for a in pkmnList:
+            a.print()
 
-            print("Pokemon: %s" % pokemonName)
-            print("Level: %s" % pokemonLevel)
-            print("Max HP: %s" % pokemonHP)
-            print("Ability: %s" % pokemonAbility)
-            print("Item: %s" % pokemonItem)
-            print("Move: %s" % pokemonMoves)
+        return pkmnList
+
 
     def select_move(self, moveIndex):
         self.check_pipe()
