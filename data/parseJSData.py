@@ -6,10 +6,10 @@ from enum import Enum
 def main():
     base_path = os.path.join(os.path.dirname(__file__), "JS_DATA\\")
 
-    abilityDict = stripFile(base_path, "abilities", 43)
-    moveDict = stripFile(base_path, "moves", 33)
-    pokeDict = stripFile(base_path, "pokedex", 5)
-    itemDict = stripFile(base_path, "items", 5)
+    abilityDict = stripFile(base_path, "abilities", 43, '": {')
+    moveDict = stripFile(base_path, "moves", 33, '": {')
+    pokeDict = stripFile(base_path, "pokedex", 5, ": {")
+    itemDict = stripFile(base_path, "items", 5, '": {')
 
     base_path = os.path.join(os.path.dirname(__file__), "obj\\")
 
@@ -19,7 +19,7 @@ def main():
     savePickle(base_path, itemDict, "items")
 
 
-def stripFile(base_path, fileName, startLine):
+def stripFile(base_path, fileName, startLine, checkString):
     fileName = fileName + ".js"
     jsFile = open(os.path.join(base_path, fileName))
     fileDict = {}
@@ -29,14 +29,15 @@ def stripFile(base_path, fileName, startLine):
         if line_num < startLine:
             continue
         
-        if currVal is not None and "num:" in line and "spritenum" not in line: 
-            num = line.replace("\t\tnum: ", "")
-            num = num.replace(",\n", "")
-            fileDict[currVal] = int(num)
-            currVal = None
+        if currVal is not None:
+            if "num:" in line and "spritenum" not in line: 
+                num = line.replace("\t\tnum: ", "")
+                num = num.replace(",\n", "")
+                fileDict[currVal] = int(num)
+                currVal = None
             continue
         
-        if ": {" in line:
+        if checkString in line and "}" not in line:
             currVal = line.replace(": {", "")
             currVal = currVal.replace('"', '')
             currVal = currVal.replace("\t", "")
