@@ -19,31 +19,52 @@ class Pokemon():
         self.itemNum = -1
 
         self.currHP = -1
+
+    def setData(self, pokeDict):
+        details = pokeDict["details"].split(",")
+
+        name = details[0].lower()
+        level = details[1].replace("L", "")
+        maxHp = pokeDict["condition"].split("/")[1]
+        active = pokeDict["active"]
+        stats = pokeDict["stats"] # TODO: Add stats
+        moves = pokeDict["moves"]
+        ability = pokeDict["ability"]
+        item = pokeDict["item"]
+
+        self.setName(name)
+        for move in moves:
+            self.setMove(move)
+        self.setItem(item)
+        self.setLevel(level)
+        self.setMaxHP(maxHp)
+        self.setAbil(ability)
     
     def setName(self, pokeName):
         self.pokeName = self.simplifyStr(pokeName)
         self.pokeNum = self.nameDict[self.pokeName]
 
+
     def setMove(self, moveString):
         for x in range(0,4):
             if self.movesName[x] != "":
                 continue
-            moveString = self.simplifyStr(moveString)
-            self.movesName[x] = moveString
-            self.movesNum[x] = self.moveDict[moveString]
+            
+            moveName = ''.join(x for x in moveString if not x.isdigit())
+            
+            self.movesName[x] = moveName
+            self.movesNum[x] = self.moveDict[moveName]
             break
 
     def setAbil(self, abilName):
-        self.abilName = self.simplifyStr(abilName)
+        self.abilName = abilName
         self.abilNum = self.abilDict[self.abilName]
 
     def setItem(self, itemName):
-        itemName = self.simplifyStr(itemName)
         self.itemName = itemName
         self.itemNum = self.itemDict[self.itemName]
 
     def setLevel(self, levelString):
-        levelString = levelString.replace("L", "")
         self.level = int(levelString)
     
     def setMaxHP(self, hpString):

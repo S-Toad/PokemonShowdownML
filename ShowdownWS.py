@@ -1,16 +1,15 @@
 
+from data.parseJSData import getPickle, DATA_TYPE
+from enum import Enum
+from Pokemon import Pokemon
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import StaleElementReferenceException, NoSuchElementException
 from selenium.webdriver.common.action_chains import ActionChains
-
-from Pokemon import Pokemon
-
-from data.parseJSData import getPickle, DATA_TYPE
-
-from enum import Enum
-exit()
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities    
 import time
+
+import ast
 
 
 DEFAULT_TIME_OUT = 20
@@ -33,8 +32,11 @@ class ShowdownWS:
         self.moveDict = getPickle(DATA_TYPE.MOVE_DICT)
         self.itemDict = getPickle(DATA_TYPE.ITEM_DICT)
 
+        desired = DesiredCapabilities.CHROME
+        desired['loggingPrefs'] = {'browser': 'ALL'}
+
         print("Loading driver")
-        self.ws = webdriver.Firefox()
+        self.ws = webdriver.Chrome(desired_capabilities=desired)
         self.ws.implicitly_wait(implicitWait)
         self.ws.set_page_load_timeout(implicitWait)
         self.ws.get(URL)
@@ -85,20 +87,59 @@ class ShowdownWS:
         self.check_pipe(time_out)
 
         self.handle_click_by_name("finduser")
-        
+
         targetEl = self.ws.find_element_by_name("data")
         targetEl.send_keys(username)
         targetEl.send_keys(webdriver.common.keys.Keys.RETURN)
 
         self.handle_click_by_name("challenge")
         self.handle_click_by_name("makeChallenge")
+        self.clearLog()
         self.skip_ahead()
 
     def acceptChallenge(self, time_out=DEFAULT_TIME_OUT):
         self.check_pipe(time_out)
+        self.clearLog()
         self.handle_click_by_name("acceptChallenge")
         self.skip_ahead()
     
+    def get_initial_state(self, time_out=DEFAULT_TIME_OUT):
+        self.check_pipe(time_out)
+
+        log = self.clearLog()
+
+        teamData = log[-2]['message']
+        teamData = teamData.split("|request|")[1]
+        teamData = teamData.replace("\\", "")
+        teamData = teamData[:-1]
+        teamData = teamData.replace("true", "True")
+        teamData = teamData.replace("false", "False")
+
+        teamData = ast.literal_eval(teamData)
+
+        listOfPokemonDicts = teamData["side"]["pokemon"]
+
+
+        pokemonList = []
+        for pokeDict in listOfPokemonDicts:
+            poke = Pokemon(self.nameDict, self.itemDict, self.abilDict, self.moveDict)
+            poke.setData(pokeDict)
+            pokemonList.append(poke)
+        
+        for poke in pokemonList:
+            poke.print()
+
+
+        #roundData = log[-1]
+
+        print(teamData)
+        print(type(teamData))
+        #print(roundData)
+
+
+
+
+    """
     def get_initial_state(self, time_out=DEFAULT_TIME_OUT):
         self.check_pipe(time_out)
 
@@ -124,22 +165,15 @@ class ShowdownWS:
                 else:
                     pkmn.setName(h2[0] + h2[1])
                 pkmn.setLevel(h2[2])
-                #pokemonName = h2[1][1:-1]
-                #pokemonLevel = h2[2].replace("L", "")
             else:
                 pkmn.setName(h2[0])
                 pkmn.setLevel(h2[1])
-                #pokemonName = h2[0]
-                #pokemonLevel = h2[1].replace("L", "")
 
             pokemonInfo = tooltip.find_elements_by_tag_name("p")
 
-            # Health is in the form of: (a/b) where b is the max health
             healthString = pokemonInfo[0].text.split("/")[1].replace(")", "")
             pkmn.setMaxHP(healthString)
 
-            # Next line is in the form of: "Ability: x / Item: y"
-            # If no item is present, then itll be: "Ability: x"
             if "/" in pokemonInfo[1].text:
                 pokemonAbility, pokemonItem = pokemonInfo[1].text.split(" / ")
                 pkmn.setAbil(pokemonAbility.split(": ")[1])
@@ -162,6 +196,7 @@ class ShowdownWS:
             a.print()
 
         return pkmnList
+    """
 
 
     def select_move(self, moveIndex):
@@ -193,6 +228,10 @@ class ShowdownWS:
             return State.MAIN_MENU
         elif self.ws.find_element_by_name("cancelSearch").size() > 0:
             return State.QUEUED
+    
+    def clearLog(self):
+        self.check_pipe()
+        return self.ws.get_log('browser')
 
     def beginConsole(self):
         while True:
@@ -216,4 +255,3 @@ class ShowdownWS:
                 self.select_move(int(result[1]))
             elif choice == "sw":
                 self.switch(int(result[1]))
-            
