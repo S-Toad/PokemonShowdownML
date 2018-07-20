@@ -118,8 +118,6 @@ class ShowdownWS:
         teamData = ast.literal_eval(teamData)
 
         listOfPokemonDicts = teamData["side"]["pokemon"]
-
-
         pokemonList = []
         for pokeDict in listOfPokemonDicts:
             poke = Pokemon(self.nameDict, self.itemDict, self.abilDict, self.moveDict)
@@ -129,12 +127,9 @@ class ShowdownWS:
         for poke in pokemonList:
             poke.print()
 
-
-        #roundData = log[-1]
-
-        print(teamData)
-        print(type(teamData))
-        #print(roundData)
+        print("------------------------------")
+        roundData = log[-1]['message']
+        print("|" + roundData + "|")
 
 
 
