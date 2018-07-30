@@ -1,13 +1,15 @@
 
 from data.parseJSData import getPickle, DATA_TYPE
 from enum import Enum
-from Pokemon import Pokemon
+from data.GameState.Pokemon import Pokemon
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import StaleElementReferenceException, NoSuchElementException
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities    
 import time
+from data.GameState.GameState import GameState
+import random
 
 import ast
 
@@ -78,6 +80,9 @@ class ShowdownWS:
         else:
             return self.handle_click_by_name(name, time_out)
 
+    def get_action_state(self):
+        
+
 
     def findMatch(self, time_out=DEFAULT_TIME_OUT):
         self.check_pipe(time_out)
@@ -126,72 +131,31 @@ class ShowdownWS:
         
         for poke in pokemonList:
             poke.print()
-
-        print("------------------------------")
-        roundData = log[-1]['message']
-        print("|" + roundData + "|")
-
-
-
-
-    """
-    def get_initial_state(self, time_out=DEFAULT_TIME_OUT):
-        self.check_pipe(time_out)
-
-        pokemon_elements = [self.ws.find_element_by_name("chooseDisabled")]
-        pokemon_elements.extend(self.ws.find_elements_by_name("chooseSwitch"))
-
-        pkmnList = []
-
-        pkmn = Pokemon(self.nameDict, self.itemDict, self.abilDict, self.moveDict)
-        for poke_element in pokemon_elements:
-            # Hovers over the element to reveal a tooltip
-            ActionChains(self.ws).move_to_element(poke_element).perform()
-            tooltip = self.ws.find_element_by_class_name("tooltip")
-
-            # H2 tag contains name and level
-            h2 = tooltip.find_element_by_tag_name("h2").text.split(" ")
-
-            # If the length is 3, the pokemon has a special name
-            # Form of [name, specialName, level] or [name, level]
-            if len(h2) == 3:
-                if "(" in h2[1]:
-                    pkmn.setName(h2[1][1:-1])
-                else:
-                    pkmn.setName(h2[0] + h2[1])
-                pkmn.setLevel(h2[2])
-            else:
-                pkmn.setName(h2[0])
-                pkmn.setLevel(h2[1])
-
-            pokemonInfo = tooltip.find_elements_by_tag_name("p")
-
-            healthString = pokemonInfo[0].text.split("/")[1].replace(")", "")
-            pkmn.setMaxHP(healthString)
-
-            if "/" in pokemonInfo[1].text:
-                pokemonAbility, pokemonItem = pokemonInfo[1].text.split(" / ")
-                pkmn.setAbil(pokemonAbility.split(": ")[1])
-                pkmn.setItem(pokemonItem.split(": ")[1])
-            else:
-                pkmn.setAbil(pokemonInfo[1].text.split(": ")[1])
-
-            moveParagraph = pokemonInfo[3].text.replace("• ", "")
-            moveLines = moveParagraph.split("\n")
-
-            for move in moveLines:
-                if ")" in move:
-                    move = move[:move.rfind(" ")]
-                pkmn.setMove(move)
-            
-            pkmnList.append(pkmn)
-            pkmn = Pokemon(self.nameDict, self.itemDict, self.abilDict, self.moveDict)
         
-        for a in pkmnList:
-            a.print()
+        gs = GameState()
+        roundData = log[-1]['message']
+        gs.parse_round(roundData)
 
-        return pkmnList
-    """
+        return gs
+
+    def auto(self):
+        startingState = self.get_initial_state()
+        currentState = startingState
+
+        while True:
+            randVal = random.randint(1, 100)
+
+            if randVal > 25:
+                randVal = random.randint(1, 4)
+                self.select_move(randVal)
+            else:
+                randVal = random.randint(1, 6)
+                self.switch(randVal)
+
+            currentState = currentState.next_state()
+            currentState.parse_round(self.clearLog())
+
+            time.sleep(3)
 
 
     def select_move(self, moveIndex):
@@ -250,3 +214,5 @@ class ShowdownWS:
                 self.select_move(int(result[1]))
             elif choice == "sw":
                 self.switch(int(result[1]))
+            elif choice == "z":
+                self.auto()
