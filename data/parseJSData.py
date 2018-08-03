@@ -4,14 +4,14 @@ from enum import Enum
 
 
 def main():
-    base_path = os.path.join(os.path.dirname(__file__), "JS_DATA\\")
+    base_path = os.path.join(os.path.dirname(__file__), "JS_DATA")
 
     abilityDict = stripFile(base_path, "abilities", 43, '": {')
     moveDict = stripFile(base_path, "moves", 33, '": {')
     pokeDict = stripFile(base_path, "pokedex", 5, ": {")
     itemDict = stripFile(base_path, "items", 5, '": {')
 
-    base_path = os.path.join(os.path.dirname(__file__), "obj\\")
+    base_path = os.path.join(os.path.dirname(__file__), "obj")
 
     savePickle(base_path, abilityDict, "abilities")
     savePickle(base_path, moveDict, "moves")
