@@ -37,6 +37,8 @@ class ShowdownWS:
         desired = DesiredCapabilities.CHROME
         desired['loggingPrefs'] = {'browser': 'ALL'}
 
+        self.username = username
+
         print("Loading driver")
         self.ws = webdriver.Chrome(desired_capabilities=desired)
         self.ws.set_page_load_timeout(30)
@@ -68,32 +70,32 @@ class ShowdownWS:
         targetEl.send_keys(Keys.RETURN)
 
     def get_state(self, i=0):
-        #self.check_pipe()
+        self.check_pipe()
 
         try:
             self.ws.find_element_by_name("acceptChallenge")
             return State.CHALLENGED
-        except: pass
-        
+        except NoSuchElementException: pass
+
         try:
             self.ws.find_element_by_name("cancelChallenge")
             return State.CHALLENGING
-        except: pass
+        except NoSuchElementException: pass
 
         try:
             self.ws.find_element_by_name("cancelSearch")
             return State.QUEUED
-        except: pass
+        except NoSuchElementException: pass
         
         try:
             self.ws.find_element_by_name("goToEnd")
             return State.SHOWING_RESULT
-        except: pass
+        except NoSuchElementException: pass
         
         try:
             self.ws.find_element_by_name("closeAndMainMenu")
             return State.MATCH_FINISHED
-        except: pass
+        except NoSuchElementException: pass
 
         canSwitch = False
         canAttack = False
@@ -101,12 +103,12 @@ class ShowdownWS:
         try:
             self.ws.find_element_by_name("chooseSwitch")
             canSwitch = True
-        except: pass
+        except NoSuchElementException: pass
         
         try:
             self.ws.find_element_by_name("chooseMove")
             canAttack = True
-        except: pass
+        except NoSuchElementException: pass
 
         if canSwitch and canAttack:
             return State.WAITING_FOR_ACTION
@@ -114,7 +116,7 @@ class ShowdownWS:
             return State.WAITING_FOR_SWITCH
         elif canAttack:
             return State.WAITING_FOR_ATTACK
-        
+
         if "Waiting for opponent..." in self.ws.page_source:
             return State.WAITING_FOR_OPPONENT
 
@@ -150,15 +152,17 @@ class ShowdownWS:
     
     def return_to_main_menu(self):
         try:
-            WebDriverWait(self.ws, 10).until(EC.element_to_be_clickable((By.NAME, "closeRoom"))).click()
-        except:
+            self.ws.execute_script("window.history.go(-1)")
+            WebDriverWait(self.ws, 2).until(EC.element_to_be_clickable((By.NAME, "closeRoom"))).click()
+        except NoSuchElementException:
+            print("Cant click")
             self.ws.quit()
     
     def skip_ahead(self):
         self.ws.find_element_by_name("goToEnd").click()
     
     def decide_action(self):
-        if random.randint(0, 1) == 0:
+        if random.randint(1, 10) <= 1:
             print("Choosing Move")
             self.choose_move()
         else:
@@ -210,8 +214,14 @@ class ShowdownWS:
 
     def automate(self, timeStep, challengeUser=""):
         while True:
-            pokeState = self.get_state()
-            print(pokeState)
+            pokeState = None
+            try:
+                pokeState = self.get_state()
+                print(pokeState)
+            except:
+                print("CONNECTION ERROR")
+                time.sleep(10)
+                continue
 
             if pokeState == State.MAIN_MENU:
                 if challengeUser != "":
@@ -220,7 +230,9 @@ class ShowdownWS:
                 self.accept_challenge()
             elif pokeState == State.CHALLENGING: pass
             elif pokeState == State.MATCH_FINISHED:
+                time.sleep(1)
                 self.return_to_main_menu()
+                time.sleep(1)
             elif pokeState == State.WAITING_FOR_ACTION:
                 self.decide_action()
             elif pokeState == State.WAITING_FOR_SWITCH:
@@ -247,6 +259,6 @@ class ShowdownWS:
                 print(self.get_state())
             elif choice == "auto":
                 if len(result) == 2:
-                    self.automate(0.1, challengeUser=result[1])
+                    self.automate(0.01, challengeUser=result[1])
                 else:
-                    self.automate(0.1)
+                    self.automate(0.01)
