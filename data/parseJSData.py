@@ -58,7 +58,7 @@ def savePickle(base_path, dictVar, name):
         pickle.dump(dictVar, f, pickle.HIGHEST_PROTOCOL)
 
 def getPickle(dateType):
-    base_path = os.path.join(os.path.dirname(__file__), "obj\\")
+    base_path = os.path.join(os.path.dirname(__file__), "obj")
 
     file_name = {
         DATA_TYPE.ABIL_DICT: "abilities.pkl",
