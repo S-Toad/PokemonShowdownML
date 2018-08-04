@@ -1,2 +1,3 @@
 *.pyc
 games_data/
+*.log
