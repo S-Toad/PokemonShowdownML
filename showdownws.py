@@ -12,6 +12,8 @@ from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from data.logdata import ActionType, get_action_type, is_valid_log
+from data.GameState.GameState import GameState
 
 class State(Enum):
     MAIN_MENU = 1
@@ -45,6 +47,7 @@ class ShowdownWS:
         self.ws.get(URL)
 
         self.login(username)
+
 
     def check_pipe(self, time_out=2):
         try:
@@ -162,11 +165,11 @@ class ShowdownWS:
         self.ws.find_element_by_name("goToEnd").click()
     
     def decide_action(self):
-        if random.randint(1, 10) <= 1:
-            print("Choosing Move")
+        if random.randint(1, 10) <= 9:
+            #print("Choosing Move")
             self.choose_move()
         else:
-            print("Choosing Switch")
+            #print("Choosing Switch")
             self.choose_switch()
 
     def choose_move(self):
@@ -211,37 +214,83 @@ class ShowdownWS:
                 break
         
         self.ws.find_element_by_css_selector('button[name="chooseSwitch"][value="%d"]' % switchIndex).click()
+    
+    def process_turn(self, gs):
+        log = self.ws.get_log('browser')
+
+        validTurnData = []
+
+        for logItem in log:
+
+            message = logItem['message']
+
+            if gs is None and "|request|" in message and "{" in message:
+                print("New Match being made, generating new game state")
+                gs = self.create_initial_game_state(message)
+
+            if is_valid_log(message):
+                validTurnData.append(message)
+        
+        gs = gs.parse_round(validTurnData)
+        """
+        for turnData in validTurnData:
+            for line in turnData.split("\\n"):
+                gs.parse_round(line)
+            print(" . . . . . . . . . . . . . . . . . .")
+        print("------------------------------")
+        """
+
+        return gs
+
+
+    def create_initial_game_state(self, requestString):
+        gs = GameState(
+            requestString,
+            self.nameDict,
+            self.itemDict,
+            self.abilDict,
+            self.moveDict
+        )
+
+
+
+        return gs
 
     def automate(self, timeStep, challengeUser=""):
+        logs = []
+
+        gs = None
         while True:
-            pokeState = None
-            try:
-                pokeState = self.get_state()
-                print(pokeState)
-            except:
-                print("CONNECTION ERROR")
-                time.sleep(10)
-                continue
+            pokeState = self.get_state()
+            #print(pokeState)
 
             if pokeState == State.MAIN_MENU:
                 if challengeUser != "":
+                    self.ws.get_log('browser')
                     self.challenge_user(challengeUser)
             elif pokeState == State.CHALLENGED:
+                self.ws.get_log('browser')
                 self.accept_challenge()
             elif pokeState == State.CHALLENGING: pass
             elif pokeState == State.MATCH_FINISHED:
+                gs = self.process_turn(gs)
+                time.sleep(1000)
                 time.sleep(1)
                 self.return_to_main_menu()
                 time.sleep(1)
+                gs = None
             elif pokeState == State.WAITING_FOR_ACTION:
+                gs = self.process_turn(gs)
                 self.decide_action()
             elif pokeState == State.WAITING_FOR_SWITCH:
+                gs = self.process_turn(gs)
                 self.choose_switch()
             elif pokeState == State.WAITING_FOR_ATTACK:
+                gs = self.process_turn(gs)
                 self.choose_move()
             elif pokeState == State.SHOWING_RESULT:
                 self.skip_ahead()
-            
+
             time.sleep(timeStep)
 
 
