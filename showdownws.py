@@ -274,6 +274,8 @@ class ShowdownWS:
             elif pokeState == State.CHALLENGING: pass
             elif pokeState == State.MATCH_FINISHED:
                 gs = self.process_turn(gs)
+                gs.print_team(gs.team)
+                gs.print_team(gs.enemyTeam)
                 time.sleep(1000)
                 time.sleep(1)
                 self.return_to_main_menu()

@@ -3,6 +3,7 @@ from ..util import string_parse
 
 class Pokemon():
     def __init__(self, pokeDict, nameDict, itemDict, abilDict, moveDict):
+        
         self.nameDict = nameDict
         self.itemDict = itemDict
         self.abilDict = abilDict
@@ -28,8 +29,13 @@ class Pokemon():
         self.spd = -1
         self.spe = -1
 
+        self.pokeMoveDict = {}
+
+        """
         self.moveList = []
         self.moveNumList = []
+        self.movePP = [0, 0, 0, 0]
+        """
 
         self.abil = ""
         self.abilNum = -1
@@ -41,14 +47,13 @@ class Pokemon():
 
         self.hasSub = False
 
-        self.parse_poke_dict()
+        if self.pokeDict is not None:
+            self.parse_poke_dict()
 
+    def parse_pokemon_info(self, indentStr, detailStr):
+        details = detailStr.split(", ")
 
-    def parse_poke_dict(self):
-        details = self.pokeDict["details"]
-        details = details.split(", ")
-
-        name = details[0]
+        name = indentStr.split(" ")[1]
         level = details[1]
 
         if len(details) == 3:
@@ -58,14 +63,33 @@ class Pokemon():
         else:
             self.genderStr = ""
             self.gender = -1
-
-        print("Creating Pokemon obj: %s" % name)
-
+        
         self.name = string_parse(name)
         self.pokeNum = self.nameDict[self.name]
 
         level = level.replace("L", "")
         self.level = int(level)
+    
+    def add_move(self, moveStr):
+        moveStr = string_parse(moveStr, stripNum=True)
+
+        print("%s move being added" % moveStr)
+
+        moveDict = self.moveDict[moveStr]
+
+        moveName = moveStr
+        if "hiddenpower" in moveName:
+            moveName = "hiddenpower"
+
+        self.pokeMoveDict[moveName] = {
+            "num": moveDict["num"],
+            "max_pp": moveDict["pp"],
+            "curr_pp": moveDict["pp"],
+            "type": moveDict["type"]
+        }
+
+    def parse_poke_dict(self):
+        self.parse_pokemon_info(self.pokeDict["ident"], self.pokeDict["details"])
 
         self.maxHP = self.pokeDict["condition"].split("/")[1]
         self.currHP = self.maxHP
@@ -79,11 +103,8 @@ class Pokemon():
         self.spd =     statDict["spd"]
         self.spe =     statDict["spe"]
 
-        for move in self.pokeDict["moves"]:
-            move = string_parse(move, stripNum=True)
-
-            self.moveList.append(move)
-            self.moveNumList.append(self.moveDict[move])
+        for moveStr in self.pokeDict["moves"]:
+            self.add_move(moveStr)
         
         self.abil = self.pokeDict["ability"]
         self.abilNum = self.abilDict[self.abil]
