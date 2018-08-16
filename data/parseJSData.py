@@ -6,10 +6,10 @@ from enum import Enum
 def main():
     base_path = os.path.join(os.path.dirname(__file__), "JS_DATA")
 
-    abilityDict = stripFile(base_path, "abilities", 43, '": {')
-    moveDict = stripFile(base_path, "moves", 33, '": {')
-    pokeDict = stripFile(base_path, "pokedex", 5, ": {")
-    itemDict = stripFile(base_path, "items", 5, '": {')
+    abilityDict = stripFile(base_path, "abilities", 43, '": {', False)
+    moveDict = stripFile(base_path, "moves", 33, '": {', True)
+    pokeDict = stripFile(base_path, "pokedex", 4, ": {", False)
+    itemDict = stripFile(base_path, "items", 4, '": {', False)
 
     base_path = os.path.join(os.path.dirname(__file__), "obj")
 
@@ -19,7 +19,7 @@ def main():
     savePickle(base_path, itemDict, "items")
 
 
-def stripFile(base_path, fileName, startLine, checkString):
+def stripFile(base_path, fileName, startLine, checkString, isMoveJS):
     fileName = fileName + ".js"
     jsFile = open(os.path.join(base_path, fileName))
     fileDict = {}
@@ -33,8 +33,24 @@ def stripFile(base_path, fileName, startLine, checkString):
             if "num:" in line and "spritenum" not in line: 
                 num = line.replace("\t\tnum: ", "")
                 num = num.replace(",\n", "")
-                fileDict[currVal] = int(num)
-                currVal = None
+
+                if isMoveJS:
+                    fileDict[currVal] = {"num": int(num)}
+                else:
+                    fileDict[currVal] = int(num)
+                    currVal = None
+            elif isMoveJS:
+                if "pp:" in line and "pp" not in fileDict[currVal].keys():
+                    pp = line.replace("\t\tpp: ", "")
+                    pp = pp.replace(",\n", "")
+                    fileDict[currVal]["pp"] = int(pp)
+                elif "type:" in line:
+                    moveType = line.replace("\t\ttype: ", "")
+                    moveType = moveType.replace(",\n", "")
+                    moveType = moveType.replace('"', '')
+
+                    fileDict[currVal]["type"] = moveType.lower()
+                    currVal = None
             continue
         
         if checkString in line and "}" not in line:
