@@ -16,3 +16,10 @@ def string_parse(nameStr, stripNum=False):
             nameStr = nameStr.replace(num, "")
 
     return nameStr
+
+def parse_json(jsonStr):
+    jsonStr = jsonStr.replace('{', '{"')
+    jsonStr = jsonStr.replace('}', '"}')
+    jsonStr = jsonStr.replace(': ', '": "')
+    jsonStr = jsonStr.replace(', ', '", "')
+    return jsonStr
