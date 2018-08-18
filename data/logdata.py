@@ -2,16 +2,16 @@
 from enum import Enum
 
 class ActionType(Enum):
-    MOVE            = 0
-    SWITCH          = 1
-    DETAILS_CHANGED = 2
-    FORM_CHANGED    = 3
-    REPLACE         = 4
-    SWAP            = 5
-    CANT            = 6
-    FAINT           = 7
-    FAIL            = 8
-    DAMAGE          = 9
+    MOVE            =  0
+    SWITCH          =  1
+    DETAILS_CHANGED =  2
+    FORM_CHANGED    =  3
+    REPLACE         =  4
+    SWAP            =  5
+    CANT            =  6
+    FAINT           =  7
+    FAIL            =  8
+    DAMAGE          =  9
     HEAL            = 10
     STATUS          = 11
     CURE_STATUS     = 12
@@ -36,6 +36,7 @@ class ActionType(Enum):
     NEW_TURN        = 31
     MAIN            = 32
     SUB             = 33
+    CLEAR_BOOST     = 34
 
 logActionDict = {
     "|move|"          : ActionType.MOVE,
@@ -69,7 +70,8 @@ logActionDict = {
     "|drag|"          : ActionType.DRAG,
     "|-end|"          : ActionType.END,
     "|-immune|"       : ActionType.IMMUNE,
-    "|turn|"          : ActionType.NEW_TURN
+    "|turn|"          : ActionType.NEW_TURN,
+    "|-clearboost|"   : ActionType.CLEAR_BOOST
 }
 
 def get_action_type(logLine, printDetails=False):
@@ -81,9 +83,7 @@ def get_action_type(logLine, printDetails=False):
                 except:
                     print(logLine.split("|"))
             
-            if key == "|-heal|":
-                return (ActionType.MAIN, logActionDict[key])
-            elif "|-" in key:
+            if "|-" in key:
                 return (ActionType.SUB, logActionDict[key])
             else:
                 return (ActionType.MAIN, logActionDict[key])

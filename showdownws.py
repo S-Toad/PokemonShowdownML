@@ -3,6 +3,7 @@ from data.parseJSData import getPickle, DATA_TYPE
 
 import time
 import random
+import copy
 
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
@@ -232,13 +233,6 @@ class ShowdownWS:
                 validTurnData.append(message)
         
         gs = gs.parse_round(validTurnData)
-        """
-        for turnData in validTurnData:
-            for line in turnData.split("\\n"):
-                gs.parse_round(line)
-            print(" . . . . . . . . . . . . . . . . . .")
-        print("------------------------------")
-        """
 
         return gs
 
@@ -257,13 +251,10 @@ class ShowdownWS:
         return gs
 
     def automate(self, timeStep, challengeUser=""):
-        logs = []
-
         gs = None
         while True:
             pokeState = self.get_state()
-            #print(pokeState)
-
+            
             if pokeState == State.MAIN_MENU:
                 if challengeUser != "":
                     self.ws.get_log('browser')
