@@ -5,11 +5,25 @@ from enum import Enum
 
 def main():
     base_path = os.path.join(os.path.dirname(__file__), "JS_DATA")
-
+    
+    """
     abilityDict = stripFile(base_path, "abilities", 43, '": {', False)
-    moveDict = stripFile(base_path, "moves", 33, '": {', True)
-    pokeDict = stripFile(base_path, "pokedex", 4, ": {", False)
-    itemDict = stripFile(base_path, "items", 4, '": {', False)
+    moveDict    = stripFile(base_path, "moves", 33, '": {', True)
+    pokeDict    = stripFile(base_path, "pokedex", 4, ": {", False)
+    itemDict    = stripFile(base_path, "items", 4, '": {', False)
+    """
+    abilityDict = strip_file(base_path, "abilities", 51, '": {',
+        ["num"]
+    )
+    moveDict    = strip_file(base_path, "moves", 33, '": {',
+        ["num", "acuracy", "basePower", "category", "pp", "priority", "type"]
+    )
+    pokeDict    = strip_file(base_path, "pokedex", 5, ": {",
+        ["num", "types", "baseStats", "abilities"]
+    )
+    itemDict    = strip_file(base_path, "items", 5, '": {',
+        ["num"]
+    )
 
     base_path = os.path.join(os.path.dirname(__file__), "obj")
 
@@ -18,6 +32,37 @@ def main():
     savePickle(base_path, pokeDict, "pokedex")
     savePickle(base_path, itemDict, "items")
 
+
+def strip_file(basePath, fileName, startLine, checkString, listOfParams):
+    fileName = fileName + ".js"
+    jsFile = open(os.path.join(basePath, fileName))
+    fileDict = {}
+    print(fileName)
+
+    currVal = None
+    for line_num, line in enumerate(jsFile):
+        if line_num < startLine - 1:
+            continue
+
+        for param in listOfParams:
+            testString = "\t\t" + param + ": "
+            if testString in line:
+                val = line.replace(testString, "")
+                val = val.replace(",\n", "")
+                val = val.replace('"', '')
+                val = val.lower()
+
+                fileDict[currVal][param] = val
+        
+        if checkString in line and "}" not in line:
+            currVal = line.replace(": {", "")
+            currVal = currVal.replace('"', '')
+            currVal = currVal.replace("\t", "")
+            currVal = currVal.replace("\n", "")
+
+            fileDict[currVal] = {}
+    
+    return fileDict
 
 def stripFile(base_path, fileName, startLine, checkString, isMoveJS):
     fileName = fileName + ".js"
