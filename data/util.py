@@ -5,6 +5,7 @@ def string_parse(nameStr, stripNum=False):
     nameStr = nameStr.replace("-", "")
     nameStr = nameStr.replace(" ", "")
     nameStr = nameStr.replace(".", "")
+    nameStr = nameStr.replace("%", "")
 
     if not stripNum:
         return nameStr

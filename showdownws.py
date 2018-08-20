@@ -225,9 +225,20 @@ class ShowdownWS:
 
             message = logItem['message']
 
-            if gs is None and "|request|" in message and "{" in message:
+            teamJSON = ""
+            if "|request|" in message and "{" in message:
+                    teamJSON = message.split("|request|")[1]
+                    teamJSON = teamJSON.replace("\\", "")
+                    teamJSON = teamJSON[:-1]
+                    teamJSON = teamJSON.replace("true", "True")
+                    teamJSON = teamJSON.replace("false", "False")
+                    teamJSON = teamJSON.replace("null", "None")
+
+            if gs is None and teamJSON != "":
                 print("New Match being made, generating new game state")
-                gs = self.create_initial_game_state(message)
+                gs = self.create_initial_game_state(teamJSON)
+            elif gs is not None:
+                gs.teamJSON = teamJSON
 
             if is_valid_log(message):
                 validTurnData.append(message)
@@ -246,15 +257,13 @@ class ShowdownWS:
             self.moveDict
         )
 
-
-
         return gs
 
-    def automate(self, timeStep, challengeUser=""):
+    def automate(self, timeStep, challengeUser="", wait=False):
         gs = None
-        while True:
+        while True:            
             pokeState = self.get_state()
-            
+
             if pokeState == State.MAIN_MENU:
                 if challengeUser != "":
                     self.ws.get_log('browser')
@@ -265,26 +274,37 @@ class ShowdownWS:
             elif pokeState == State.CHALLENGING: pass
             elif pokeState == State.MATCH_FINISHED:
                 gs = self.process_turn(gs)
-                gs.print_team(gs.team)
-                gs.print_team(gs.enemyTeam)
-                time.sleep(1000)
+                if wait:
+                    gs.print_info()
+                    input("Press a button to continue...")
+                time.sleep(10000)
                 time.sleep(1)
                 self.return_to_main_menu()
                 time.sleep(1)
                 gs = None
             elif pokeState == State.WAITING_FOR_ACTION:
                 gs = self.process_turn(gs)
+                if wait:
+                    gs.print_info()
+                    input("Press a button to continue...")
                 self.decide_action()
             elif pokeState == State.WAITING_FOR_SWITCH:
                 gs = self.process_turn(gs)
+                if wait:
+                    gs.print_info()
+                    input("Press a button to continue...")
                 self.choose_switch()
             elif pokeState == State.WAITING_FOR_ATTACK:
                 gs = self.process_turn(gs)
+                if wait:
+                    gs.print_info()
+                    input("Press a button to continue...")
                 self.choose_move()
             elif pokeState == State.SHOWING_RESULT:
                 self.skip_ahead()
 
             time.sleep(timeStep)
+
 
 
     def console(self):
@@ -302,5 +322,10 @@ class ShowdownWS:
             elif choice == "auto":
                 if len(result) == 2:
                     self.automate(0.01, challengeUser=result[1])
+                else:
+                    self.automate(0.01)
+            elif choice == "autowait":
+                if len(result) == 2:
+                    self.automate(0.01, challengeUser=result[1], wait=True)
                 else:
                     self.automate(0.01)

@@ -22,21 +22,15 @@ class GameState():
         # Used by "Main" actions to pass its params to "sub" action
         self.actionParams = None
 
-        # Extract a JSON and change its values to be a Python dictionary
-        teamJSON = requestString.split("|request|")[1]
-        teamJSON = teamJSON.replace("\\", "")
-        teamJSON = teamJSON[:-1]
-        teamJSON = teamJSON.replace("true", "True")
-        teamJSON = teamJSON.replace("false", "False")
-        teamJSON = teamJSON.replace("null", "None")
+        self.teamJSON = requestString
 
         # Debug print of JSON
         print("------------------------")
-        print(teamJSON)
+        print(self.teamJSON)
         print("------------------------")
         
         # Evaluated edited JSON as python dictionary
-        teamDict = ast.literal_eval(teamJSON)
+        teamDict = ast.literal_eval(self.teamJSON)
 
         # Get teams IDs
         self.id = teamDict["side"]["id"]
@@ -56,6 +50,9 @@ class GameState():
         self.weather = ""
         self.hazards = {}
         self.enemyHazards = {}
+
+        self.teamHasSub = False
+        self.enemyHasSub = False
 
 
 
@@ -79,10 +76,13 @@ class GameState():
             teamID, pokeName = self.strip_team(details) 
             poke = self.get_pokemon(None, pokeName, teamID=teamID)
             poke.set_health(0)
+        elif action == ActionType.DETAILS_CHANGED:
+            self.handle_details_changed(params)
         elif action == ActionType.NEW_TURN:
             turn = params[2]
             print("-----------------------------------\nTurn %s starting" % turn)
     
+
     def handle_sub_action(self, mainAction, action, params):
         """Similar to handle_main_action, handles the smaller events
 
@@ -205,6 +205,11 @@ class GameState():
             poke.set_item(itemStr)
 
             print("%s now has %s" % (poke.name, itemStr))
+        elif action == ActionType.END_ITEM:
+            #[]|-enditem|p2a: Dialga|Leftovers|[from] move: Knock Off|[of] p1a: Landorus
+            teamID, pokeName = self.strip_team(params[2])
+            poke = self.get_pokemon(None, pokeName, teamID=teamID)
+            poke.set_item("")
         elif action == ActionType.ABILITY:
             print(params)
             # []|-ability|p1a: Arcanine|Intimidate|boost
@@ -223,11 +228,57 @@ class GameState():
             poke = self.get_pokemon(None, pokeName, teamID=teamID)
 
             print("%s had its stats reset" % poke.name)
-            poke.statMultipliers = poke.baseMultipliers
-        """
-        if mainAction == ActionType.MOVE:
-            self.handle_sub_move(action, params)
-        """
+            poke.statMultipliers = copy.deepcopy(poke.baseMultipliers)
+        elif action == ActionType.CRIT:
+            print("CRIT")
+            print(params)
+        elif action == ActionType.START:
+            # Example: []|-start|p2a: Zekrom|confusion|[fatigue]
+            teamID, pokeName = self.strip_team(params[2])
+            startEvent = params[3]
+
+            if startEvent == "confusion":
+                self.get_pokemon(None, pokeName, teamID=teamID).set_status("confusion")
+            elif startEvent == "Substitute":
+                if teamID == self.id:
+                    print("Sub started for my team")
+                    self.teamHasSub = True
+                else:
+                    print("Sub started for enemy")
+                    self.enemyHasSub = True
+            else:
+                print("%s started with %s" % (pokeName, startEvent))
+        elif action == ActionType.END:
+            # Example: []|-end|p2a: Zekrom|confusion
+            teamID, pokeName = self.strip_team(params[2])
+            endEvent = params[3]
+
+            if endEvent == "confusion":
+                self.get_pokemon(None, pokeName, teamID=teamID).remove_status("confusion")
+            elif endEvent == "Substitute":
+                if teamID == self.id:
+                    print("Sub ended for my team")
+                    self.teamHasSub = False
+                else:
+                    print("Sub ended for enemy")
+                    self.enemyHasSub = False
+            else:
+                print("%s ended with %s" % (pokeName, endEvent))
+
+    def handle_details_changed(self, params):
+        # Example: []|detailschange|p1a: Zygarde|Zygarde-Complete, L73
+        teamID, pokeName = self.strip_team(params[2])
+        newPokeName = string_parse(params[3].split(",")[0])
+        poke = self.get_pokemon(None, pokeName, teamID=teamID)
+
+        poke.parse_pokemon_info(params[2], params[3])
+
+        if teamID == self.id:
+            pokeDict = ast.literal_eval(self.teamJSON)["side"]["pokemon"][newPokeName]
+            poke.stats = pokeDict["stats"]
+            poke.possible_abilities = [pokeDict["baseAbility"]]
+
+        print("Transformed into %s" % newPokeName)
 
     def set_health(self, pokeStr, healthStr):
         teamID, pokeName = self.strip_team(pokeStr)
@@ -277,6 +328,11 @@ class GameState():
                 aType, action = actionTuple
                 params = line.split("|")
 
+                for param in params:
+                    if "[from]" in param:
+                        self.handle_from(params)
+                        break
+
                 if aType == ActionType.MAIN:
                     mainAction = action
                     self.handle_main_action(action, params)
@@ -302,6 +358,32 @@ class GameState():
 
         return (teamID, pokeName)
     
+    def handle_from(self, params):
+        #[]|-enditem|p2a: Dialga|Leftovers|[from] move: Knock Off|[of] p1a: Landorus
+        #[]|-damage|p1a: Landorus|33/250|[from] item: Life Orb
+        
+        print("FROM")
+        print(params)
+
+        details = None
+        item = None
+        for param in params:
+            if "p1" in param or "p2" in param and details is None:
+                details = param
+            if "[from] item:" in param:
+                item = param.split("item: ")[1]
+                item = string_parse(item)
+        
+        if item is None:
+            print(params)
+            return
+
+        teamID, pokeName = self.strip_team(details)
+        self.get_pokemon(None, pokeName, teamID=teamID).set_item(item)
+
+        
+
+
 
     def handle_move(self, params):
         """Handles the move event
@@ -378,9 +460,11 @@ class GameState():
 
         # True if our team
         if teamID == self.id:
+            self.teamHasSub = False
             # Iterate over pokemon setting its active status to True/False
             for poke in self.team:
-                poke.statMultipliers = poke.baseMultipliers
+                print("%s had its stats reset" % poke.name)
+                poke.statMultipliers = copy.deepcopy(poke.baseMultipliers)
                 poke.isActive = poke.name in pokeName
                 if poke.name in pokeName:
                     print("%s on your team is now set to active" % poke.name)
@@ -389,8 +473,10 @@ class GameState():
         # Otherwise its the enemy team
         # Boolean to store if pokemon exists
         foundPokemon = False
+        self.enemyHasSub = False
         for poke in self.enemyTeam:
-            poke.statMultipliers = poke.baseMultipliers
+            print("%s had its stats reset" % poke.name)
+            poke.statMultipliers = copy.deepcopy(poke.baseMultipliers)
             # If pokemon found, set foundPokemon to true
             # Also set teams active status to True/False
             if poke.name in pokeName:
@@ -400,6 +486,7 @@ class GameState():
             else:
                 poke.isActive = False
         
+
         if foundPokemon:
             return
 
@@ -416,8 +503,28 @@ class GameState():
         self.enemyTeam.append(poke)
 
 
-    def print_team(self, team):
+    def print_info(self):
         print("-----------------------")
-        for poke in team:
+        print("Field: %s" % self.field)
+        print("Weather: %s" % self.weather)
+        print("-----------------------")
+        print("My Pokemon:")
+        for poke in self.team:
             poke.print_details()
             print()
+        print("-----------------------")
+        print("My Hazards: ", end='')
+        if self.teamHasSub:
+            print("Subsitute active")
+        print(self.hazards)
+        print("-----------------------")
+        print("Enemy Pokemon:")
+        for poke in self.enemyTeam:
+            poke.print_details()
+            print()
+        print("-----------------------")
+        print("Enemy Hazards: ", end='')
+        if self.enemyHasSub:
+            print("Enemy subsitute active")
+        print(self.enemyHazards)
+

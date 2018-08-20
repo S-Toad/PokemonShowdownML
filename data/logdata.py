@@ -37,6 +37,7 @@ class ActionType(Enum):
     MAIN            = 32
     SUB             = 33
     CLEAR_BOOST     = 34
+    START           = 35
 
 logActionDict = {
     "|move|"          : ActionType.MOVE,
@@ -71,7 +72,8 @@ logActionDict = {
     "|-end|"          : ActionType.END,
     "|-immune|"       : ActionType.IMMUNE,
     "|turn|"          : ActionType.NEW_TURN,
-    "|-clearboost|"   : ActionType.CLEAR_BOOST
+    "|-clearboost|"   : ActionType.CLEAR_BOOST,
+    "|-start|"        : ActionType.START,
 }
 
 def get_action_type(logLine, printDetails=False):

@@ -1,6 +1,7 @@
 
 from ..util import string_parse, parse_json
 import ast
+import copy
 
 class Pokemon():
     def __init__(self, pokeDict, nameDict, itemDict, abilDict, moveDict):
@@ -49,7 +50,7 @@ class Pokemon():
             "accuracy": 0
         }
 
-        self.baseMultipliers = self.statMultipliers
+        self.baseMultipliers = copy.deepcopy(self.statMultipliers)
         """
         self.atkMult = 0
         self.spaMult = 0
@@ -63,16 +64,14 @@ class Pokemon():
         self.abil = ""
         self.abilNum = -1
 
-        self.item = ""
+        self.item = None
         self.itemNum = -1
 
         self.fainted = False
 
-        self.hasSub = False
-
         if self.pokeDict is not None:
             self.parse_poke_dict()
-        
+
         self.statuses = []
         self.statusesList = [
             'brn','par','slp',
@@ -210,8 +209,7 @@ class Pokemon():
             self.add_move(moveStr)
         
         # Set ability
-        self.abil = self.pokeDict["ability"]
-        self.abilNum = int(self.abilDict[self.abil]["num"])
+        self.possible_abilities = [self.pokeDict["ability"]]
 
         # Set items (if any)
         self.set_item(self.pokeDict["item"])
@@ -249,12 +247,33 @@ class Pokemon():
         print("Name: %s" % self.name)
         if self.name != self.trueName:
             print("True Name: %s" % self.trueName)
+        
         print("Num: %s" % str(self.pokeNum))
+
+        print("Level: %s" % str(self.level))
+
+        print("Item: %s" % self.item)
+
+        print("Gender: %s" % str(self.gender))
+        
+        print("Active: %s" % str(self.isActive))
+
+        print("Moves: ", end='')
+        print(self.pokeMoveDict)
+
         print("Type: ", end='')
         print(self.types)
+        
         print("Stats: ", end='')
         print(self.stats)
-        print("Health: %s" % str(self.currHP))
+        
+        print("Health: %s/%s" % (str(self.currHP), str(self.maxHP)))
+        
         print("Possible Abilities: ", end='')
         print(self.possible_abilities)
 
+        print("Statuses: ", end='')
+        print(self.statuses)
+
+        print("Stat Mults: ", end='')
+        print(self.statMultipliers)
