@@ -148,6 +148,8 @@ class Action:
         poke_index = pokedex[pokeStr]['poke_index']
         poke_one_hot[poke_index] = 1
 
+        return poke_one_hot
+
     def handle_move_encoding(self):
         player1_one_hot, poke1_one_hot = self.handle_pokemon_encoding(self.params[1])
 
@@ -170,6 +172,10 @@ class Action:
         damage_percent = 0.0
         if "/" in damage_str:
             curr_health, max_health = damage_str.split("/")
+
+            if ' ' in max_health:
+                max_health = max_health.split(' ')[0]
+
             curr_health = float(curr_health)
             max_health = float(max_health)
 
@@ -194,14 +200,18 @@ class Action:
         
 
     def strip_key(self, key):
+        remove_list = [' ', '-', '\'']
         key = key.lower()
-        key = key.replace(" ", "")
+
+        for item in remove_list:
+            key = key.replace(item, '')
 
         return key
 
     
     def encode(self):
-        action_one_hot = np.zeros(32)
+        # TODO: There's some actions we dont care to encode
+        action_one_hot = np.zeros(35)
         action_one_hot[self.action_type.value] = 1
 
         encoders = {
