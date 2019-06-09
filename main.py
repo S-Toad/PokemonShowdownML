@@ -14,22 +14,24 @@ MODE = "gen7randombattle"
 
 async def main():
 
-    player1 = await ShowdownClient.createInstance()
-    player2 = await ShowdownClient.createInstance()
+    #player1 = await ShowdownClient.createInstance()
+    #player2 = await ShowdownClient.createInstance()
 
-    await player1.login()
-    await player2.login()
 
-    await player1.challenge_user(client=player2, register=False)
-    await player2.accept_challenge(register=False)
+    player1, player2 = await asyncio.gather(
+        ShowdownClient.createInstance(),
+        ShowdownClient.createInstance())
+    
+    await asyncio.gather(
+        player1.login(),
+        player2.login())
 
-    time.sleep(1)
+    await player1.challenge_user(client=player2)
+    await player2.accept_challenge()
 
-    player1_actions = await player1.get_turn_actions(register=True)
-    player2_actions = await player2.get_turn_actions(register=True)
-
-    player1.get_battle_id_from_queue(deregister=True)
-    player2.get_battle_id_from_queue(deregister=True)
+    player1_actions, player2_actions = await asyncio.gather(
+        player1.get_initial_actions(),
+        player2.get_initial_actions())
 
     print("--------------------------------------------------")
     print("Battle started: https://play.pokemonshowdown.com/%s" % player1.battle_id)
@@ -40,13 +42,15 @@ async def main():
     for i in range(3):
         
         print("Starting turn %d" % i)
+        # TODO: These don't depend on eachother
+        # We can run them both and wait for both to be done
+
         await player1.choose_move(1)
         await player2.choose_move(1)
 
-        player1_actions = await player1.get_turn_actions(register=True)
-        player2_actions = await player2.get_turn_actions(register=True)
-        
-        #time.sleep(5)
+        player1_actions, player2_actions = await asyncio.gather(
+            player1.get_turn_actions(),
+            player2.get_turn_actions())
 
     #print("--------------")
     #await player1.get_turn_actions()
