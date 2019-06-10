@@ -36,11 +36,16 @@ class ActionType(Enum):
     DRAG            = 28
     END             = 29
     IMMUNE          = 30
-    NEW_TURN        = 31
-    MAIN            = 32
-    SUB             = 33
     CLEAR_BOOST     = 34
-    START           = 35
+    UPKEEP          = 35
+    PLACEHOLDER     = 36  # Actions above are embedded, actions below is for logic
+    START           = 37
+    WIN             = 38
+    LOSS            = 39
+    TIE             = 40
+    ERROR           = 41
+    NEW_TURN        = 42
+    REQUEST         = 43
 
 action_map = {
     "move"          : ActionType.MOVE,
@@ -77,6 +82,11 @@ action_map = {
     "turn"          : ActionType.NEW_TURN,
     "-clearboost"   : ActionType.CLEAR_BOOST,
     "-start"        : ActionType.START,
+    "error"         : ActionType.ERROR,
+    "upkeep"        : ActionType.UPKEEP,
+    "win"           : ActionType.WIN,
+    "tie"           : ActionType.TIE,
+    "request"       : ActionType.REQUEST,
 }
 
 max_params = 14
@@ -99,6 +109,11 @@ class Action:
     params = None
     encoding = None
 
+    # createAction is our factory, however we may make
+    # actions outside of this for logic sake
+    def __init__(self, action_type=None):
+        self.action_type = action_type
+
     @classmethod
     def createAction(cls, msg):
         if not cls.is_valid_message(msg):
@@ -110,8 +125,6 @@ class Action:
 
         logging.info("Mapping %s -> %s with %d parameters"
             % (self.params[0], self.action_type, len(self.params)-1))
-
-        self.encode()
 
         return self
     
@@ -211,7 +224,7 @@ class Action:
     
     def encode(self):
         # TODO: There's some actions we dont care to encode
-        action_one_hot = np.zeros(35)
+        action_one_hot = np.zeros(ActionType.PLACEHOLDER.value)
         action_one_hot[self.action_type.value] = 1
 
         encoders = {
@@ -222,11 +235,21 @@ class Action:
         encoder = encoders.get(self.action_type, None)
 
         if encoder:
-            #try:
-            encoder()
-            #except:
-            #    print("%s failed to encode." % self.action_type)
-            #    print(self.params)
+            try:
+                encoder()
+            except:
+                print("%s failed to encode." % self.action_type)
+                print(self.params)
+                raise
         else:
             pass
             #print("%s not yet handled" % self.action_type)
+
+    def is_terminating(self):
+        return self.action_type == ActionType.NEW_TURN \
+            or self.action_type == ActionType.WIN \
+            or self.action_type == ActionType.TIE \
+            or self.action_type == ActionType.ERROR
+    
+    def is_logic_action(self):
+        return self.action_type.value >= ActionType.PLACEHOLDER.value
