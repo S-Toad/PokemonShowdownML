@@ -12,10 +12,24 @@ from showdownclient import ShowdownClient
 WEBSOCKET = "sim.smogon.com:8000"
 MODE = "gen7randombattle"
 
+
+async def challenge_me(username):
+    bot = await ShowdownClient.createInstance()
+    await bot.login()
+    await bot.challenge_user(name=username)
+
+    await bot.prepare_new_battle()
+
+    i = 1
+    while True:
+        print("Starting turn %d" % i)
+        i+=1
+        await bot.perform_random_action()
+
+
 async def main():
 
-    #player1 = await ShowdownClient.createInstance()
-    #player2 = await ShowdownClient.createInstance()
+    #await challenge_me("sdsadsdas"); return
 
 
     player1, player2 = await asyncio.gather(
@@ -30,32 +44,30 @@ async def main():
     await player2.accept_challenge()
 
     player1_actions, player2_actions = await asyncio.gather(
-        player1.get_initial_actions(),
-        player2.get_initial_actions())
+        player1.prepare_new_battle(),
+        player2.prepare_new_battle())
 
-    print("--------------------------------------------------")
+    print("--------------------------------------------------------------------------")
     print("Battle started: https://play.pokemonshowdown.com/%s" % player1.battle_id)
-    print("--------------------------------------------------")
+    print("--------------------------------------------------------------------------")
 
     time.sleep(5)
 
-    for i in range(3):
-        
+    i = 1
+    while True:
         print("Starting turn %d" % i)
-        # TODO: These don't depend on eachother
-        # We can run them both and wait for both to be done
+        i+=1
 
-        await player1.choose_move(1)
-        await player2.choose_move(1)
+        player1_actions, player1_actions = await asyncio.gather(
+            player1.perform_random_action(),
+            player2.perform_random_action())
+        
+        if player1.is_battle_over():
+            break
 
-        player1_actions, player2_actions = await asyncio.gather(
-            player1.get_turn_actions(),
-            player2.get_turn_actions())
-
-    #print("--------------")
-    #await player1.get_turn_actions()
 
 if __name__ == "__main__":
+    
     # Set lowest level
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)
