@@ -4,10 +4,11 @@ import random
 import string
 import time
 
-from action import ActionType
+from concurrent.futures import ProcessPoolExecutor
 from config import logger
 from showdown.websocket_communication import PSWebsocketClient
 from showdownclient import ShowdownClient
+from state.battle import BattleState
 
 WEBSOCKET = "sim.smogon.com:8000"
 MODE = "gen7randombattle"
@@ -17,21 +18,20 @@ async def challenge_me(username):
     bot = await ShowdownClient.createInstance()
     await bot.login()
     await bot.challenge_user(name=username)
-
     await bot.prepare_new_battle()
 
-    i = 1
-    while True:
+    for i in range(200):
         print("Starting turn %d" % i)
-        i+=1
-        await bot.perform_random_action()
+
+        # current_battle <-> battle_state
+
+async def test():
+    for i in range(10):
+        await asyncio.sleep(1)
+        print(i)
 
 
 async def main():
-
-    #await challenge_me("sdsadsdas"); return
-
-
     player1, player2 = await asyncio.gather(
         ShowdownClient.createInstance(),
         ShowdownClient.createInstance())
@@ -39,31 +39,57 @@ async def main():
     await asyncio.gather(
         player1.login(),
         player2.login())
-
+    
     await player1.challenge_user(client=player2)
+    time.sleep(0.5)
     await player2.accept_challenge()
+    
 
-    player1_actions, player2_actions = await asyncio.gather(
-        player1.prepare_new_battle(),
-        player2.prepare_new_battle())
+    await asyncio.gather(
+        player1.start_new_battle(), 
+        player2.start_new_battle())
+
+    await asyncio.gather(
+        player1.current_battle.wait_for_updates(),
+        player2.current_battle.wait_for_updates())
 
     print("--------------------------------------------------------------------------")
-    print("Battle started: https://play.pokemonshowdown.com/%s" % player1.battle_id)
+    print("Battle started: %s" % player1.current_battle.url)
     print("--------------------------------------------------------------------------")
 
-    time.sleep(5)
+    time.sleep(1)
 
     i = 1
     while True:
-        print("Starting turn %d" % i)
-        i+=1
+        print("\n\nStarting turn %d" % i)
 
-        player1_actions, player1_actions = await asyncio.gather(
-            player1.perform_random_action(),
-            player2.perform_random_action())
+        print("Starting the initial actions...")
+
+        await asyncio.gather(
+            player1.current_battle.perform_random_action(),
+            player2.current_battle.perform_random_action())
         
-        if player1.is_battle_over():
-            break
+        while player1.current_battle == BattleState.NEED_SWITCH \
+                or player2.current_battle == BattleState.NEED_SWITCH:
+            
+            if player1.current_battle == BattleState.NEED_SWITCH:
+                print("Player 1 needs to switch")
+                await player1.current_battle.perform_random_switch()
+            
+            if player2.current_battle == BattleState.NEED_SWITCH:
+                print("Player 2 needs to switch")
+                await player2.current_battle.perform_random_switch()
+            
+            await asyncio.gather(
+                player1.current_battle.wait_for_updates(),
+                player2.current_battle.wait_for_updates())
+        
+        print("Done waiting for initial action")
+        
+        print("Finished turn %d" % i)
+
+        i+=1
+        time.sleep(5)
 
 
 if __name__ == "__main__":

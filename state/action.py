@@ -142,6 +142,15 @@ class Action:
             logging.debug("Can't map '%s' to an action" % msg)
             return False
     
+    def __eq__(self, obj):
+        if isinstance(obj, Action):
+            return obj.action_type == self.action_type
+        else:
+            return obj == self.action_type
+    
+    def __ne__(self, obj):
+        return not self.__eq__(obj)
+    
     def get_action_embedding(self):
         action_one_hot = np.zeros(len(action_map))
         action_one_hot[self.action_type] = 1
