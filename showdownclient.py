@@ -47,9 +47,10 @@ class ShowdownClient:
         await self.ps_ws_client.login()
         self.log("Done logging in")
     
-    async def start_new_battle(self):
-        print("Starting a new battle")
-        self.current_battle = BattleClient(self.ps_ws_client.websocket)
+    async def start_new_battle(self, battle_log=None):
+        self.log("Starting a new battle")
+        self.current_battle = BattleClient(self.ps_ws_client.websocket,
+            battle_log=battle_log)
     
 
     async def challenge_user(self, client=None, name=None,

@@ -123,8 +123,8 @@ class Action:
         self.params = msg.split("|")[1:]
         self.action_type = action_map[self.params[0]]
 
-        logging.info("Mapping %s -> %s with %d parameters"
-            % (self.params[0], self.action_type, len(self.params)-1))
+        #logging.info("Mapping %s -> %s with %d parameters"
+        #    % (self.params[0], self.action_type, len(self.params)-1))
 
         return self
     
@@ -139,7 +139,7 @@ class Action:
         if key in action_map:
             return True
         else:
-            logging.debug("Can't map '%s' to an action" % msg)
+            #logging.debug("Can't map '%s' to an action" % msg)
             return False
     
     def __eq__(self, obj):
@@ -150,6 +150,9 @@ class Action:
     
     def __ne__(self, obj):
         return not self.__eq__(obj)
+    
+    def __str__(self):
+        return str(self.action_type)
     
     def get_action_embedding(self):
         action_one_hot = np.zeros(len(action_map))
@@ -184,7 +187,7 @@ class Action:
         else: 
             player2_one_hot, poke2_one_hot = self.handle_pokemon_encoding(self.params[3])
 
-        logging.debug("Finished MOVE encoding")
+        #logging.debug("Finished MOVE encoding")
 
 
     def handle_damage_encoding(self):
@@ -243,16 +246,18 @@ class Action:
 
         encoder = encoders.get(self.action_type, None)
 
+        """
         if encoder:
             try:
                 encoder()
             except:
-                print("%s failed to encode." % self.action_type)
+                #print("%s failed to encode." % self.action_type)
                 print(self.params)
                 raise
         else:
             pass
             #print("%s not yet handled" % self.action_type)
+        """
 
     def is_terminating(self):
         return self.action_type == ActionType.NEW_TURN \
