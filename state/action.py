@@ -1,113 +1,25 @@
 import logging
 import numpy as np
+import traceback
 
-from showdown.data import all_move_json, pokedex
-from enum import Enum
+from state.data import ability_dict, pokedex_dict, move_dict, item_dict, \
+    stat_dict, status_dict, weather_dict, side_dict, start_dict, activate_dict
+from state.action_type import ActionType, action_map
 
-class ActionType(Enum):
-    MOVE            =  0
-    SWITCH          =  1
-    DETAILS_CHANGED =  2
-    FORM_CHANGED    =  3
-    REPLACE         =  4
-    SWAP            =  5
-    CANT            =  6
-    FAINT           =  7
-    FAIL            =  8
-    DAMAGE          =  9
-    HEAL            = 10
-    STATUS          = 11
-    CURE_STATUS     = 12
-    CURE_TEAM       = 13
-    BOOST           = 14
-    UNBOOST         = 15
-    WEATHER         = 16
-    FIELD_START     = 17
-    FIELD_END       = 18
-    SIDE_START      = 19
-    SIDE_END        = 20
-    CRIT            = 21
-    ITEM            = 22
-    END_ITEM        = 23
-    ABILITY         = 24
-    END_ABILITY     = 25
-    TRANSFORM       = 26
-    ACTIVATE        = 27
-    DRAG            = 28
-    END             = 29
-    IMMUNE          = 30
-    CLEAR_BOOST     = 34
-    UPKEEP          = 35
-    PLACEHOLDER     = 36  # Actions above are embedded, actions below is for logic
-    START           = 37
-    WIN             = 38
-    LOSS            = 39
-    TIE             = 40
-    ERROR           = 41
-    NEW_TURN        = 42
-    REQUEST         = 43
-
-action_map = {
-    "move"          : ActionType.MOVE,
-    "switch"        : ActionType.SWITCH,
-    "detailschange" : ActionType.DETAILS_CHANGED,
-    "-formechange"  : ActionType.FORM_CHANGED,
-    "replace"       : ActionType.REPLACE,
-    "swap"          : ActionType.SWAP,
-    "cant"          : ActionType.CANT,
-    "faint"         : ActionType.FAINT,
-    "-fail"         : ActionType.FAIL,
-    "-damage"       : ActionType.DAMAGE,
-    "-heal"         : ActionType.HEAL,
-    "-status"       : ActionType.STATUS,
-    "-curestatus"   : ActionType.CURE_STATUS,
-    "-cureteam"     : ActionType.CURE_TEAM,
-    "-boost"        : ActionType.BOOST,
-    "-unboost"      : ActionType.UNBOOST,
-    "-weather"      : ActionType.WEATHER,
-    "-fieldstart"   : ActionType.FIELD_START,
-    "-fieldend"     : ActionType.FIELD_END,
-    "-sidestart"    : ActionType.SIDE_START,
-    "-sideend"      : ActionType.SIDE_END,
-    "-crit"         : ActionType.CRIT,
-    "-item"         : ActionType.ITEM,
-    "-enditem"      : ActionType.END_ITEM,
-    "-ability"      : ActionType.ABILITY,
-    "-endability"   : ActionType.END_ABILITY,
-    "-transform"    : ActionType.TRANSFORM,
-    "-activate"     : ActionType.ACTIVATE,
-    "drag"          : ActionType.DRAG,
-    "-end"          : ActionType.END,
-    "-immune"       : ActionType.IMMUNE,
-    "turn"          : ActionType.NEW_TURN,
-    "-clearboost"   : ActionType.CLEAR_BOOST,
-    "-start"        : ActionType.START,
-    "error"         : ActionType.ERROR,
-    "upkeep"        : ActionType.UPKEEP,
-    "win"           : ActionType.WIN,
-    "tie"           : ActionType.TIE,
-    "request"       : ActionType.REQUEST,
-}
-
-max_params = 14
-param_lengths = [10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10]
-
-
-move_count = 0
-for move_key in all_move_json:
-    all_move_json[move_key]['move_index'] = move_count
-    move_count += 1
-
-poke_count = 0
-for poke_key in pokedex:
-    pokedex[poke_key]['poke_index'] = poke_count
-    poke_count += 1
-
+ABILITY_ENCODING_LENGTH = 9
+POKE_ENCODING_LENGTH = 10
+MOVE_ENCODING_LENGTH = 12
+STAT_COUNT = len(stat_dict)
+STATUS_COUNT = len(status_dict)
+WEATHER_COUNT = len(weather_dict)
+SIDE_COUNT = len(side_dict)
+START_COUNT = len(start_dict)
+ACTIVATE_COUNT = len(activate_dict)
 class Action:
-
     action_type = None
     params = None
     encoding = None
+    logger = None
 
     # createAction is our factory, however we may make
     # actions outside of this for logic sake
@@ -115,16 +27,14 @@ class Action:
         self.action_type = action_type
 
     @classmethod
-    def createAction(cls, msg):
+    def createAction(cls, msg, logger=None):
         if not cls.is_valid_message(msg):
             return None
 
         self = Action()
         self.params = msg.split("|")[1:]
         self.action_type = action_map[self.params[0]]
-
-        #logging.info("Mapping %s -> %s with %d parameters"
-        #    % (self.params[0], self.action_type, len(self.params)-1))
+        self.logger = logger
 
         return self
     
@@ -154,50 +64,107 @@ class Action:
     def __str__(self):
         return str(self.action_type)
     
+    def log(self, level, msg, *args):
+        if self.logger:
+            msg = "%s : %s" % (str(self), msg)
+            self.logger.log(level, msg, *args)
+    
+    def strip_key(self, orig_key):
+        remove_list = [' ', '-', '\'']
+        key = orig_key.lower()
+
+        for item in remove_list:
+            key = key.replace(item, '')
+
+        self.log(logging.DEBUG, '%s ---> %s', orig_key, key)
+
+        return key
+    
     def get_action_embedding(self):
-        action_one_hot = np.zeros(len(action_map))
+        action_one_hot = np.zeros(len(action_map), dtype=int)
         action_one_hot[self.action_type] = 1
 
         return action_one_hot
 
-    def get_move_embedding(self, moveStr):
-        move_one_hot = np.zeros(len(all_move_json))
-        move_index = all_move_json[moveStr]['move_index']
-        move_one_hot[move_index] = 1
+    def to_binary_encoding(self, value, binary_length):
+        binary_encoding = np.zeros(binary_length, dtype=int)
+        value_binary_str = "{0:b}".format(value)
 
-        return move_one_hot
+        i = binary_length - len(value_binary_str)
+        for c in value_binary_str:
+            binary_encoding[i] = int(c)
+            i += 1
+        
+        return binary_encoding
 
+    def get_move_binary_encoding(self, move_str):
+        move_index = move_dict[move_str]['index']
+        return self.to_binary_encoding(move_index, MOVE_ENCODING_LENGTH)
+
+    def get_team_encoding(self, poke_team_str, team_str):
+        team_encoding = np.zeros(1, dtype=int)
+        if team_str in poke_team_str:
+            self.log(logging.DEBUG, "Identified team as ours")
+            team_encoding[0] = 1
+        else:
+            self.log(logging.DEBUG, "Identified team as opponents")
+        
+        return team_encoding
     
-    def get_poke_embedding(self, pokeStr):
-        poke_one_hot = np.zeros(len(pokedex))
-        poke_index = pokedex[pokeStr]['poke_index']
-        poke_one_hot[poke_index] = 1
+    def get_poke_encoding(self, poke_str, team_str):
+        if poke_str == '' or poke_str == 'null':
+            self.log(logging.DEBUG, "Returning all zeros for %s", poke_str)
+            return np.zeros(POKE_ENCODING_LENGTH, dtype=int)
 
-        return poke_one_hot
+        poke_team_str, poke_name_str = poke_str.split(": ")
+        poke_name_str = self.strip_key(poke_name_str)
 
-    def handle_move_encoding(self):
-        player1_one_hot, poke1_one_hot = self.handle_pokemon_encoding(self.params[1])
+        team_encoding = self.get_team_encoding(poke_team_str, team_str)
 
+        poke_index = pokedex_dict[poke_name_str]['index']
+        poke_encoding = self.to_binary_encoding(poke_index, POKE_ENCODING_LENGTH)
+
+        self.log(logging.DEBUG, "Index received was %d, interpreted as %s",
+            poke_index, poke_encoding)
+
+        return np.append(team_encoding, poke_encoding)
+
+    def handle_move_encoding(self, team_str):
+        poke1_str = self.params[1]
+        poke2_str = self.params[3]
         move_str = self.strip_key(self.params[2])
-        move_one_hot = self.get_move_embedding(move_str)
 
-        if ":" not in self.params[3]:
-            player2_one_hot = player1_one_hot.copy()
-            poke2_one_hot = poke1_one_hot.copy()
-        else: 
-            player2_one_hot, poke2_one_hot = self.handle_pokemon_encoding(self.params[3])
+        self.log(logging.DEBUG, "poke1='%s', poke2='%s', move='%s'",
+            poke1_str, poke2_str, move_str)
 
-        #logging.debug("Finished MOVE encoding")
+        poke1_encoding = self.get_poke_encoding(poke1_str, team_str)
+        poke2_encoding = self.get_poke_encoding(poke2_str, team_str)
+        move_encoding = self.get_move_binary_encoding(move_str)
 
+        encoding = np.append(poke1_encoding, poke2_encoding)
+        encoding = np.append(encoding, move_encoding)
 
-    def handle_damage_encoding(self):
-        player_one_hot, poke_one_hot = self.handle_pokemon_encoding(self.params[1])
+        return encoding
 
+    def handle_simple_encoding(self, team_str):
+        poke_str = self.params[1]
+        return self.get_poke_encoding(poke_str, team_str)
+
+    def handle_damage_encoding(self, team_str):
+        # TODO: Sometimes healing/damage can be from items or abilities
+        # We need to register these as separate events somehow
+        # TODO: If healing/damage does the same thing, feels like they
+        # should be considered as a "HEALTH_CHANGE" event instead?
+        poke_str = self.params[1]
         damage_str = self.params[2]
+
+        poke_encoding = self.get_poke_encoding(poke_str, team_str)
+
         damage_percent = 0.0
         if "/" in damage_str:
             curr_health, max_health = damage_str.split("/")
 
+            # Gets rid of conditions
             if ' ' in max_health:
                 max_health = max_health.split(' ')[0]
 
@@ -205,59 +172,243 @@ class Action:
             max_health = float(max_health)
 
             damage_percent = curr_health / max_health
-
-    
-    def handle_pokemon_encoding(self, pokemon_str):
-        player_str, poke_name = pokemon_str.split(": ")
-        poke_name = self.strip_key(poke_name)
-
-        # TODO Need to change this to be if this is us or not
-        player_one_hot = np.zeros(2)
-        if player_str == "p1a":
-            player_one_hot[0] = 1
+            self.log(logging.DEBUG, "Setting health to %0.5f", damage_percent)
         else:
-            player_one_hot[1] = 0
-
-        poke_one_hot = self.get_poke_embedding(poke_name)
-
-        return (player_one_hot, poke_one_hot)
-
+            self.log(logging.DEBUG, "Pokemon fainted")
         
-
-    def strip_key(self, key):
-        remove_list = [' ', '-', '\'']
-        key = key.lower()
-
-        for item in remove_list:
-            key = key.replace(item, '')
-
-        return key
-
+        return np.append(poke_encoding, damage_percent)
     
-    def encode(self):
-        # TODO: There's some actions we dont care to encode
-        action_one_hot = np.zeros(ActionType.PLACEHOLDER.value)
-        action_one_hot[self.action_type.value] = 1
+    def handle_switch_encoding(self, team_str):
+        poke_str = self.params[1]
+        return self.get_poke_encoding(poke_str, team_str)
+    
+    def handle_ability_encoding(self, team_str):
+        poke_str = self.params[1]
+        poke_encoding = self.get_poke_encoding(poke_str, team_str)
+
+        ability_str = self.params[2]
+        ability_str = self.strip_key(ability_str)
+        ability_index = ability_dict[ability_str]['index']
+        ability_encoding = self.to_binary_encoding(ability_index, ABILITY_ENCODING_LENGTH)
+
+        self.log(logging.DEBUG, "Received ability key='%s'", ability_str)
+        self.log(logging.DEBUG, "Index received was %d, interpreted as %s",
+            ability_index, ability_encoding)
+
+        return np.append(poke_encoding, ability_encoding)
+    
+    def handle_boost_encoding(self, team_str):
+        poke_str = self.params[1]
+        stat_str = self.params[2]
+        bonus_value = int(self.params[3])
+
+        poke_encoding = self.get_poke_encoding(poke_str, team_str)
+        
+        stat_index = stat_dict[stat_str]['index']
+        stat_encoding = np.zeros(STAT_COUNT)
+        stat_encoding[stat_index-1] = 1
+        self.log(logging.DEBUG, "Mapping stat=%s --> %s", stat_str, stat_encoding)
+
+        boost_encoding = np.append(poke_encoding, stat_encoding)
+        boost_encoding = np.append(boost_encoding, bonus_value)
+
+        return boost_encoding
+
+    def handle_unboost_encoding(self, team_str):
+        return self.handle_boost_encoding(team_str)
+
+    def handle_status_encoding(self, team_str):
+        poke_str = self.params[1]
+        status_str = self.params[2]
+
+        poke_encoding = self.get_poke_encoding(poke_str, team_str)
+
+        status_index = status_dict[status_str]['index']
+        status_encoding = np.zeros(STATUS_COUNT)
+        status_encoding[status_index-1] = 1
+
+        self.log(logging.DEBUG, "Mapping status=%s --> %s", status_str, status_encoding)
+
+        return np.append(poke_encoding, status_encoding)
+    
+    def handle_cure_status_encoding(self, team_str):
+        return self.handle_status_encoding(team_str)
+    
+    def handle_fail_encoding(self, team_str):
+        return self.handle_simple_encoding(team_str)
+    
+    def handle_immune_encoding(self, team_str):
+        return self.handle_simple_encoding(team_str)
+    
+    def handle_crit_encoding(self, team_str):
+        return self.handle_simple_encoding(team_str)
+    
+    def handle_resist_encoding(self, team_str):
+        return self.handle_simple_encoding(team_str)
+    
+    def handle_heal_encoding(self, team_str):
+        return self.handle_damage_encoding(team_str)
+    
+    def handle_weather_encoding(self, team_str):
+        weather_str = self.params[1]
+        weather_str = self.strip_key(weather_str)
+        
+        weather_encoding = np.zeros(WEATHER_COUNT)
+        if weather_str == 'none':
+            self.log(logging.DEBUG, "Weather was removed")
+        else:
+            weather_index = weather_dict[weather_str]['index']
+            weather_encoding[weather_index-1] = 1
+        
+        self.log(logging.DEBUG, "Mapped %s ---> %s", weather_str, weather_encoding)
+        
+        upkeep = 0
+        if len(self.params) == 3 and self.params[2] == '[upkeep]':
+            self.log(logging.DEBUG, "Weather was upkeep")
+            upkeep = 1
+        
+        return np.append(weather_encoding, upkeep)
+    
+    def handle_item_encoding(self, team_str):
+        poke_str = self.params[1]
+        item_str = self.params[2]
+
+        poke_encoding = self.get_poke_encoding(poke_str, team_str)
+
+        item_str = self.strip_key(item_str)
+        item_index = item_dict[item_str]['index']
+        item_encoding = np.zeros(item_dict['COUNT'])
+        item_encoding[item_index-1] = 1
+
+        self.log(logging.DEBUG, "Mapping %s ---> %s", item_index, item_encoding)
+
+        return np.append(poke_encoding, item_encoding)
+    
+    def handle_end_item_encoding(self, team_str):
+        return self.handle_item_encoding(team_str)
+    
+    def handle_side_start_encoding(self, team_str):
+        side_str = self.params[1]
+        effect_str = self.params[2]
+    
+        side_encoding = self.get_team_encoding(side_str, team_str)
+
+        effect_str = effect_str.replace("move: ", "")
+        effect_str = self.strip_key(effect_str)
+        effect_index = side_dict[effect_str]['index']
+        effect_encoding = np.zeros(SIDE_COUNT)
+        effect_encoding[effect_index-1] = 1
+
+        self.log(logging.DEBUG, 'Mapped %s ---> %s', effect_str, effect_encoding)
+    
+        return np.append(side_encoding, effect_encoding)
+
+    def handle_side_end_encoding(self, team_str):
+        return self.handle_side_start_encoding(team_str)
+    
+    def handle_cant_encoding(self, team_str):
+        return self.handle_simple_encoding(team_str)
+    
+    def handle_start_encoding(self, team_str):
+        poke_str = self.params[1]
+        effect_str = self.params[2]
+
+        poke_encoding = self.get_poke_encoding(poke_str, team_str)
+
+        effect_str = effect_str.replace("move: ", "")
+        effect_str = self.strip_key(effect_str)
+        effect_index = start_dict[effect_str]['index']
+        effect_encoding = np.zeros(START_COUNT)
+        effect_encoding[effect_index-1] = 1
+
+        return np.append(poke_encoding, effect_encoding)
+
+    def handle_end_encoding(self, team_str):
+        return self.handle_start_encoding(team_str)
+
+    def handle_activate_encoding(self, team_str):
+        poke_str = self.params[1]
+        activate_str = self.params[2]
+
+        poke_encoding = self.get_poke_encoding(poke_str, team_str)
+
+        activate_str = activate_str.replace("ability: ", "")
+        activate_encoding = np.zeros(ACTIVATE_COUNT)
+        if activate_str not in activate_dict:
+            self.log(logging.DEBUG, "%s was not used in activate", activate_str)
+        else:
+            activate_index = activate_dict[activate_str]['index']
+            activate_encoding[activate_index-1] = 1
+        
+        return np.append(poke_encoding, activate_encoding)
+    
+    def handle_drag_encoding(self, team_str):
+        return self.handle_switch_encoding(team_str)
+    
+    def handle_details_changed_encoding(self, team_str):
+        return self.handle_simple_encoding(team_str)
+
+    def encode(self, team_str):
+        if self.encoding is not None:
+            return
+        
+        if self == ActionType.FAINT or \
+                self == ActionType.UPKEEP:
+            self.log(logging.DEBUG, "%s does not need encoding.", self)
+            self.encoding = []  # Used to supress logging in the future
+            return
 
         encoders = {
-            ActionType.MOVE : self.handle_move_encoding,
-            ActionType.DAMAGE : self.handle_damage_encoding,
+            ActionType.MOVE            : self.handle_move_encoding,
+            ActionType.DAMAGE          : self.handle_damage_encoding,
+            ActionType.SWITCH          : self.handle_switch_encoding,
+            ActionType.ABILITY         : self.handle_ability_encoding,
+            ActionType.BOOST           : self.handle_boost_encoding,
+            ActionType.UNBOOST         : self.handle_unboost_encoding,
+            ActionType.STATUS          : self.handle_status_encoding,
+            ActionType.IMMUNE          : self.handle_immune_encoding,
+            ActionType.FAIL            : self.handle_fail_encoding,
+            ActionType.CRIT            : self.handle_crit_encoding,
+            ActionType.HEAL            : self.handle_heal_encoding,
+            ActionType.WEATHER         : self.handle_weather_encoding,
+            ActionType.CURE_STATUS     : self.handle_cure_status_encoding,
+            ActionType.ITEM            : self.handle_item_encoding,
+            ActionType.END_ITEM        : self.handle_end_item_encoding,
+            ActionType.SIDE_START      : self.handle_side_start_encoding,
+            ActionType.SIDE_END        : self.handle_side_end_encoding,
+            ActionType.CANT            : self.handle_cant_encoding,
+            ActionType.START           : self.handle_start_encoding,
+            ActionType.END             : self.handle_end_encoding,
+            ActionType.ACTIVATE        : self.handle_activate_encoding,
+            ActionType.DRAG            : self.handle_drag_encoding,
+            ActionType.DETAILS_CHANGED : self.handle_details_changed_encoding,
         }
 
         encoder = encoders.get(self.action_type, None)
 
-        """
         if encoder:
+            self.log(logging.DEBUG, "Starting encoding...")
+            self.log(logging.DEBUG, "Params=%s", self.params)
+
             try:
-                encoder()
+                action_one_hot = np.zeros(ActionType.PLACEHOLDER.value, dtype=int)
+                action_one_hot[self.action_type.value] = 1
+
+                self.log(logging.DEBUG, "action one-hot=%s", action_one_hot)
+
+                action_encoding = encoder(team_str)
+                self.encoding = np.append(action_one_hot, action_encoding)
+                self.log(logging.DEBUG, "final encoding=%s", self.encoding)
+                self.log(logging.DEBUG, "Done encoding!")
             except:
-                #print("%s failed to encode." % self.action_type)
+                print("%s failed to encode." % self.action_type)
+                print(print(traceback.print_exc()))
                 print(self.params)
                 raise
         else:
-            pass
-            #print("%s not yet handled" % self.action_type)
-        """
+            self.log(logging.DEBUG, "%s is not yet handled!", self)
+            self.encoding = []  # Used to supress logging
+
 
     def is_terminating(self):
         return self.action_type == ActionType.NEW_TURN \

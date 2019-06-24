@@ -175,7 +175,7 @@ class BattleClient:
                         self.handle_action_msg(line)
     
     def handle_action_msg(self, line):
-        action = Action.createAction(line)
+        action = Action.createAction(line, logger=self.battle_logger)
 
         if action is None: return
         
@@ -222,6 +222,12 @@ class BattleClient:
     
     def handle_error_action(self, action):
         self.log(logging.DEBUG, "Found error: %s", action.params)
+    
+    def encode(self):
+        self.log(logging.DEBUG, "Starting encoding...")
+        for action in self.action_sequence:
+            action.encode(self.player_side)
+        self.log(logging.DEBUG, "Done encoding!")
     
     async def receive_msg(self, timeout=1):
         try:

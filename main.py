@@ -57,7 +57,7 @@ async def main():
     print("Battle started at: %s" % player1.current_battle.url)
     print("--------------------------------------------------------------------------")
 
-    time.sleep(5)
+    time.sleep(1)
 
     i = 1
     start = time.time()
@@ -99,6 +99,8 @@ async def main():
                 player2.current_battle.wait_for_updates())
                 
         print("Finished turn %d" % i)
+        player1.current_battle.encode()
+        player2.current_battle.encode()
 
         turn_time = time.time() - turn_start
         print("Turn took %d seconds" % turn_time)
