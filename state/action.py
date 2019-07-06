@@ -9,6 +9,8 @@ from state.action_type import ActionType, action_map
 ABILITY_ENCODING_LENGTH = 9
 POKE_ENCODING_LENGTH = 10
 MOVE_ENCODING_LENGTH = 12
+ITEM_ENCODING_LENGTH = 10
+FROM_ENCODING_LENGTH = 12
 STAT_COUNT = len(stat_dict)
 STATUS_COUNT = len(status_dict)
 WEATHER_COUNT = len(weather_dict)
@@ -70,11 +72,14 @@ class Action:
             self.logger.log(level, msg, *args)
     
     def strip_key(self, orig_key):
-        remove_list = [' ', '-', '\'']
+        remove_list = [' ', '-', '\'', '.']
         key = orig_key.lower()
 
         for item in remove_list:
             key = key.replace(item, '')
+        
+        for c in '0123456789':
+            key = key.replace(c, '')
 
         self.log(logging.DEBUG, '%s ---> %s', orig_key, key)
 
@@ -97,9 +102,17 @@ class Action:
         
         return binary_encoding
 
-    def get_move_binary_encoding(self, move_str):
+    def get_move_binary_encoding(self, move_str, encoding_length=MOVE_ENCODING_LENGTH):
         move_index = move_dict[move_str]['index']
-        return self.to_binary_encoding(move_index, MOVE_ENCODING_LENGTH)
+        return self.to_binary_encoding(move_index, encoding_length)
+    
+    def get_ability_binary_encoding(self, ability_str, encoding_length=ABILITY_ENCODING_LENGTH):
+        ability_index = ability_dict[ability_str]['index']
+        return self.to_binary_encoding(ability_index, encoding_length)
+    
+    def get_item_binary_encoding(self, item_str, encoding_length=ITEM_ENCODING_LENGTH):
+        item_index = item_dict[item_str]['index']
+        return self.to_binary_encoding(item_index, encoding_length)
 
     def get_team_encoding(self, poke_team_str, team_str):
         team_encoding = np.zeros(1, dtype=int)
@@ -111,21 +124,30 @@ class Action:
         
         return team_encoding
     
+    def get_status_encoding(self, status_str):
+        status_index = status_dict[status_str]['index']
+        status_encoding = np.zeros(STATUS_COUNT)
+        status_encoding[status_index-1] = 1
+        return status_encoding
+    
+    def get_poke_name_encoding(self, poke_name_str):
+        poke_index = pokedex_dict[poke_name_str]['index']
+        return self.to_binary_encoding(poke_index, POKE_ENCODING_LENGTH)
+    
     def get_poke_encoding(self, poke_str, team_str):
         if poke_str == '' or poke_str == 'null':
-            self.log(logging.DEBUG, "Returning all zeros for %s", poke_str)
+            self.log(logging.DEBUG, "Returning all zeros for '%s'", poke_str)
             return np.zeros(POKE_ENCODING_LENGTH, dtype=int)
+
+        # pokemon 'type: null' handling
+        if 'type:' in poke_str:
+            poke_str = poke_str.replace("type:", "type")
 
         poke_team_str, poke_name_str = poke_str.split(": ")
         poke_name_str = self.strip_key(poke_name_str)
 
         team_encoding = self.get_team_encoding(poke_team_str, team_str)
-
-        poke_index = pokedex_dict[poke_name_str]['index']
-        poke_encoding = self.to_binary_encoding(poke_index, POKE_ENCODING_LENGTH)
-
-        self.log(logging.DEBUG, "Index received was %d, interpreted as %s",
-            poke_index, poke_encoding)
+        poke_encoding = self.get_poke_name_encoding(poke_name_str)
 
         return np.append(team_encoding, poke_encoding)
 
@@ -176,11 +198,26 @@ class Action:
         else:
             self.log(logging.DEBUG, "Pokemon fainted")
         
-        return np.append(poke_encoding, damage_percent)
+        damage_encoding = np.append(poke_encoding, damage_percent)
+
+        if len(self.params) == 4:
+            from_str = self.params[3]
+            from_encoding = self.handle_from_encoding(from_str)
+            damage_encoding = np.append(damage_encoding, from_encoding)
+        
+        
+        return damage_encoding
     
     def handle_switch_encoding(self, team_str):
         poke_str = self.params[1]
-        return self.get_poke_encoding(poke_str, team_str)
+        poke_encoding = self.get_poke_encoding(poke_str, team_str)
+
+        from_str = self.params[-1]
+        if "[from]" in from_str:
+            from_encoding = self.handle_from_encoding(from_str)
+            return np.append(poke_encoding, from_encoding)
+
+        return poke_encoding
     
     def handle_ability_encoding(self, team_str):
         poke_str = self.params[1]
@@ -188,12 +225,11 @@ class Action:
 
         ability_str = self.params[2]
         ability_str = self.strip_key(ability_str)
-        ability_index = ability_dict[ability_str]['index']
-        ability_encoding = self.to_binary_encoding(ability_index, ABILITY_ENCODING_LENGTH)
+        ability_encoding = self.get_ability_binary_encoding(ability_str)
 
         self.log(logging.DEBUG, "Received ability key='%s'", ability_str)
-        self.log(logging.DEBUG, "Index received was %d, interpreted as %s",
-            ability_index, ability_encoding)
+        self.log(logging.DEBUG, "Index received was %s, interpreted as %s",
+            ability_str, ability_encoding)
 
         return np.append(poke_encoding, ability_encoding)
     
@@ -222,12 +258,10 @@ class Action:
         status_str = self.params[2]
 
         poke_encoding = self.get_poke_encoding(poke_str, team_str)
+        status_encoding = self.get_status_encoding(status_str)
 
-        status_index = status_dict[status_str]['index']
-        status_encoding = np.zeros(STATUS_COUNT)
-        status_encoding[status_index-1] = 1
-
-        self.log(logging.DEBUG, "Mapping status=%s --> %s", status_str, status_encoding)
+        self.log(logging.DEBUG, "Mapping status=%s --> %s",
+            status_str, status_encoding)
 
         return np.append(poke_encoding, status_encoding)
     
@@ -252,22 +286,20 @@ class Action:
     def handle_weather_encoding(self, team_str):
         weather_str = self.params[1]
         weather_str = self.strip_key(weather_str)
-        
+
         weather_encoding = np.zeros(WEATHER_COUNT)
+        from_encoding = np.zeros(0)
         if weather_str == 'none':
             self.log(logging.DEBUG, "Weather was removed")
-        else:
+        elif len(self.params) == 3:
+            from_str = self.params[2]
             weather_index = weather_dict[weather_str]['index']
             weather_encoding[weather_index-1] = 1
+            from_encoding = self.handle_from_encoding(from_str)
         
         self.log(logging.DEBUG, "Mapped %s ---> %s", weather_str, weather_encoding)
         
-        upkeep = 0
-        if len(self.params) == 3 and self.params[2] == '[upkeep]':
-            self.log(logging.DEBUG, "Weather was upkeep")
-            upkeep = 1
-        
-        return np.append(weather_encoding, upkeep)
+        return np.append(weather_encoding, from_encoding)
     
     def handle_item_encoding(self, team_str):
         poke_str = self.params[1]
@@ -276,11 +308,9 @@ class Action:
         poke_encoding = self.get_poke_encoding(poke_str, team_str)
 
         item_str = self.strip_key(item_str)
-        item_index = item_dict[item_str]['index']
-        item_encoding = np.zeros(item_dict['COUNT'])
-        item_encoding[item_index-1] = 1
+        item_encoding = self.get_item_binary_encoding(item_str)
 
-        self.log(logging.DEBUG, "Mapping %s ---> %s", item_index, item_encoding)
+        self.log(logging.DEBUG, "Mapping %s ---> %s", item_str, item_encoding)
 
         return np.append(poke_encoding, item_encoding)
     
@@ -309,19 +339,72 @@ class Action:
     def handle_cant_encoding(self, team_str):
         return self.handle_simple_encoding(team_str)
     
+    def handle_from_encoding(self, from_str):
+        from_str = from_str.replace("[from] ", "")
+        from_str = from_str.replace("[from]", "")
+
+        if ':' in from_str:
+            from_type, from_value = from_str.split(": ")
+        else:
+            from_type = None
+            from_value = from_str
+
+        from_value = self.strip_key(from_value)
+        from_one_hot = np.zeros(6)
+        from_value_encoding = np.zeros(0)
+
+        # From a move
+        if from_value in move_dict:
+            self.log(logging.DEBUG, "Mapping %s as a move", from_str)
+            from_one_hot[0] = 1
+            from_value_encoding = self.get_move_binary_encoding(
+                from_value, encoding_length=FROM_ENCODING_LENGTH)
+        # From an ability
+        elif from_value in ability_dict:
+            self.log(logging.DEBUG, "Mapping %s as an ability", from_str)
+            from_one_hot[1] = 1
+            from_value_encoding = self.get_ability_binary_encoding(
+                from_value, encoding_length=FROM_ENCODING_LENGTH)
+        # From an item
+        elif from_value in item_dict:
+            self.log(logging.DEBUG, "Mapping %s as an item", from_str)
+            from_one_hot[2] = 1
+            from_value_encoding = self.get_item_binary_encoding(
+                from_value, encoding_length=FROM_ENCODING_LENGTH)
+        # From an upkeep
+        elif from_type == '[upkeep]':
+            self.log(logging.DEBUG, "Mapping %s as an upkeep", from_str)
+            from_one_hot[3] = 1
+        # From a status effect
+        elif from_value in status_dict:
+            self.log(logging.DEBUG, "Mapping %s as a status", from_str)
+            from_one_hot[4] = 1
+            from_value_encoding = self.get_status_encoding(from_str)
+        # From recoil
+        elif from_value == 'recoil':
+            self.log(logging.DEBUG, "Mapping %s as a recoil", from_str)
+            from_one_hot[5] = 1
+        # Silent effect? Do nothing
+        elif from_value == '[silent]':
+            pass
+        else:
+            self.log(logging.DEBUG, "Not able to handle from_str: %s", from_str)
+            return from_one_hot
+        
+        from_encoding = np.append(from_one_hot, from_value_encoding)
+        
+        self.log(logging.DEBUG, "From Encoding: %s -> %s", from_str, from_encoding)
+
+        return from_encoding
+    
     def handle_start_encoding(self, team_str):
         poke_str = self.params[1]
         effect_str = self.params[2]
 
         poke_encoding = self.get_poke_encoding(poke_str, team_str)
+        from_encoding = self.handle_from_encoding(effect_str)
 
-        effect_str = effect_str.replace("move: ", "")
-        effect_str = self.strip_key(effect_str)
-        effect_index = start_dict[effect_str]['index']
-        effect_encoding = np.zeros(START_COUNT)
-        effect_encoding[effect_index-1] = 1
-
-        return np.append(poke_encoding, effect_encoding)
+        return np.append(poke_encoding, from_encoding)
 
     def handle_end_encoding(self, team_str):
         return self.handle_start_encoding(team_str)
@@ -398,15 +481,16 @@ class Action:
 
                 action_encoding = encoder(team_str)
                 self.encoding = np.append(action_one_hot, action_encoding)
-                self.log(logging.DEBUG, "final encoding=%s", self.encoding)
+                self.log(logging.DEBUG, "final encoding=%s, encoding_length=%d",
+                    self.encoding, len(self.encoding))
                 self.log(logging.DEBUG, "Done encoding!")
             except:
-                print("%s failed to encode." % self.action_type)
+                print("WARNING: %s failed to encode." % self.action_type)
                 print(print(traceback.print_exc()))
                 print(self.params)
                 raise
         else:
-            self.log(logging.DEBUG, "%s is not yet handled!", self)
+            self.log(logging.DEBUG, "WARNING: %s is not yet handled!", self)
             self.encoding = []  # Used to supress logging
 
 

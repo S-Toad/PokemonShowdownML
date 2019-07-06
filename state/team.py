@@ -43,9 +43,9 @@ class PokemonTeam:
         # If 4 moves aren't available for some reason
         # E.g, outrage
         if (choice_index-1) >= len(self.active_dict['moves']):
-            print("Move is out of range")
+            #print("Move is out of range")
             return False
-        print("Trying move index of %d" % (choice_index-1))
+        #print("Trying move index of %d" % (choice_index-1))
         move_dict = self.active_dict['moves'][choice_index-1]
         return ('disabled' not in move_dict) or not move_dict['disabled']
 
@@ -98,6 +98,7 @@ class PokemonTeam:
         available_actions['move_okay'] = move_available
 
         return available_actions
+    
 
 class Pokemon:    
     name = None
@@ -122,7 +123,7 @@ class Pokemon:
     curr_index = None
 
     def __init__(self, request_dict):
-        self.name = request_dict['ident'].split(' ')[1]
+        self.name = request_dict['ident'].split(': ')[1]
 
         c_health, m_health = request_dict['condition'].split('/')
         self.curr_health = int(c_health)

@@ -49,9 +49,17 @@ async def main():
         player1.start_new_battle(battle_log='p1'), 
         player2.start_new_battle(battle_log='p2'))
 
-    await asyncio.gather(
-        player1.current_battle.wait_for_updates(),
-        player2.current_battle.wait_for_updates())
+    p1_battle = player1.current_battle
+    p2_battle = player2.current_battle
+
+    while p1_battle != BattleState.NEW_TURN \
+            and p2_battle != BattleState.NEW_TURN:
+        await asyncio.gather(
+            p1_battle.flush_listen(),
+            p2_battle.flush_listen())
+    
+    p1_side_encoding = p1_battle.get_side_encoding()
+    p2_side_encoding = p2_battle.get_side_encoding()
 
     print("--------------------------------------------------------------------------")
     print("Battle started at: %s" % player1.current_battle.url)
@@ -61,54 +69,45 @@ async def main():
 
     i = 1
     start = time.time()
-    while player1.current_battle != BattleState.WIN \
-            or player2.current_battle != BattleState.WIN:
+    while not p1_battle.is_game_terminating() \
+            or not p2_battle.is_game_terminating():
         print("\n\nStarting turn %d" % i)
-
         turn_start = time.time()
-        
-        print("Starting the initial actions...")
 
-        
-        await player1.current_battle.perform_random_action()
-        await player2.current_battle.perform_random_action()
-
-        await asyncio.gather(
-            player1.current_battle.wait_for_updates(),
-            player2.current_battle.wait_for_updates())
-        
-        while player1.current_battle == BattleState.NEED_SWITCH \
-                or player2.current_battle == BattleState.NEED_SWITCH:
-            
-            if player1.current_battle == BattleState.NEED_SWITCH \
-                    and player2.current_battle == BattleState.NEED_SWITCH:
-                print("Both players need switches")
-                await player1.current_battle.perform_random_switch()
-                await player2.current_battle.perform_random_switch()         
-            elif player1.current_battle == BattleState.NEED_SWITCH:
-                print("Player 1 needs to switch")
-                await player1.current_battle.perform_random_switch()
-            else:
-                print("Player 2 needs to switch")
-                await player2.current_battle.perform_random_switch()
-            
-            print("Handled switches needed")
-
-            await asyncio.gather(
-                player1.current_battle.wait_for_updates(),
-                player2.current_battle.wait_for_updates())
-                
-        print("Finished turn %d" % i)
         player1.current_battle.encode()
         player2.current_battle.encode()
+        
+
+        p1_battle.set_available_actions()
+        #p1_battle.start_listen_for_actions()
+
+        p2_battle.set_available_actions()
+        #p2_battle.start_listen_for_actions()
+        while not p1_battle.is_turn_terminating() \
+                or not p2_battle.is_turn_terminating():
+
+            if p1_battle.can_take_action():
+                await p1_battle.perform_random_action()
+            if p2_battle.can_take_action():
+                await p2_battle.perform_random_action()
+            
+
+            await asyncio.gather(
+                p1_battle.flush_listen(),
+                p2_battle.flush_listen())
+
+
+        print("Finished turn %d" % i)
 
         turn_time = time.time() - turn_start
-        print("Turn took %d seconds" % turn_time)
+        print("Turn took %0.3f seconds" % turn_time)
 
         i+=1
     turn_time = time.time() - start
 
-    print("Battle took %d seconds" % turn_time)
+    winner = player1 if p1_battle == BattleState.WIN else player2
+    print("%s won!" % winner.username)
+    print("Battle took %0.3f seconds" % turn_time)
 
 
 if __name__ == "__main__":
