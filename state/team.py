@@ -48,7 +48,10 @@ class PokemonTeam:
         print("Trying move index of %d" % (choice_index-1))
         move_dict = self.active_dict['moves'][choice_index-1]
         return ('disabled' not in move_dict) or not move_dict['disabled']
-    
+
+    def is_switch_allowed(self, choice_index):
+        return self.get_poke_from_index(choice_index).is_switch_allowed()
+
     def switch_available(self):
         if 'trapped' in self.active_dict and self.active_dict['trapped']:
             return False
@@ -70,6 +73,31 @@ class PokemonTeam:
             if poke.index == index:
                 return poke
         #print("No pokemon has choice_index of %d" % choice_index)
+    
+    def get_available_options(self):
+        available_actions = {}
+        
+        available_actions['switch'] = [False] * 6
+        available_actions['move'] = [False] * 6
+        available_actions['switch_okay'] = False
+        available_actions['move_okay'] = False
+
+        switch_available = False
+        for i in range(6):
+            available_actions['switch'][i] = self.is_switch_allowed(i+1)
+            if available_actions['switch'][i]:
+                switch_available = True
+
+        move_available = False
+        for i in range(4):
+            available_actions['move'][i] = self.is_move_allowed(i+1)
+            if available_actions['move'][i]:
+                move_available = True
+        
+        available_actions['switch_okay'] = switch_available
+        available_actions['move_okay'] = move_available
+
+        return available_actions
 
 class Pokemon:    
     name = None
